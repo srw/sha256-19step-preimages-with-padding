@@ -1,0 +1,3 @@
+FOUND ok=1 mode=comp target=0 contexts_tried=1 contexts_used=1 chains=6907199 search_time=3.6s
+W = 352ad731 2bf2d607 38c8cefd fc1c3632 74f9c6d4 3724ee39 ac2293c3 eb9d1234 ea35ce63 c2aa1d3c ef70050d 78dcef7d e20398d5 d4df7523 06846dae 616f012d
+H19=d374822f21eb0d4dbc809ae0443c2c6c66f8ce5d07c8779bcc5fc7849f44e3c2

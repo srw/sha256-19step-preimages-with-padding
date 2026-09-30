@@ -1,0 +1,9 @@
+# Demonstrations: SHA-256 reduced to 19 steps (every compression call), standard IV and padding.
+[demo] target = SHA-256("abc") = FIPS 180 test vector
+  message_hex = 8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a
+  sha256_19   = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+
+[demo] target = SHA-256("") (empty string); message = 64-byte ASCII block + 55 computed bytes (119 bytes)
+  message_repr = b'This first block is plain text; the second one was computed.....\xfe@\x9c\xc90\x12\x8ar\x04\x81\xf8l\x05\x03\xd7\xa0\x18Q\x9a\x12\x9d\xf4I\x13\x97 \xbb^\xefR\x08\x95\xf8\xb5\x15h[\xb4\x04\x81{\xe3\x01\x88\x0f\x0c\xaa\xbe\x02\xfc\x9e_\x1c\x95\xc0'
+  message_hex  = 5468697320666972737420626c6f636b20697320706c61696e20746578743b20746865207365636f6e64206f6e652077617320636f6d70757465642e2e2e2e2efe409cc930128a720481f86c0503d7a018519a129df449139720bb5eef520895f8b515685bb404817be301880f0caabe02fc9e5f1c95c0
+  sha256_19    = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855

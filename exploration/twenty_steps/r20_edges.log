@@ -1,0 +1,28 @@
+A: pivots a2,a3,a4,a5; context a6=a7, e10=e11=-1
+   word   C16    C17    C18    C19
+   a2    7.74  15.09  15.86  15.72
+   a3    1.48   7.87  15.31  16.09
+   a4    1.68   0.97   8.07  15.21
+   a5   12.24   1.00   0.00   7.88
+B: pivots a2,a3,a4,a6; context a8=a7, e9=-1, e12=0
+   word   C16    C17    C18    C19
+   a2    7.82  15.35  15.97  16.13
+   a3    0.91   7.88  15.27  15.91
+   a4    0.97   1.42   7.94  15.08
+   a6    1.10  11.96   1.35   1.87
+no conditions (reference): late words
+   word   C16    C17    C18    C19
+   a7   11.81   7.89  12.03   1.60
+   a8   16.00  12.18   7.77  12.49
+   a9   14.05  15.69  12.04   8.04
+   a10  15.36  14.24  15.66  11.81
+   a11  12.81  15.30  14.20  15.41
+   a12  15.92  13.03  15.29  14.36
+C/D: truncated outputs -- freed target-side words (no conditions)
+   word   C16    C17    C18    C19
+   a13  16.26  16.02  13.19  15.01
+   a14  15.61  16.03  15.96  12.84
+   a15  15.63  15.52  15.95  15.88
+   a16  12.11  15.72  15.85  16.14
+E: two-block, flip one bit of chaining-value word h with digest fixed
+   C16..C19 residual change (bits): 15.63  15.85  13.95  15.29 | W0 change 1.84 bits

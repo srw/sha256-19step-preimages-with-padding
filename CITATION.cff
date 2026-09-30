@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it, and cite K. S. Basra's context-shaping work it builds on."
+title: "Preimages for 19-step SHA-256 with standard padding"
+authors:
+  - family-names: Wain
+    given-names: Sebastian
+date-released: 2026-09-30
+license: MIT
+repository-code: "https://github.com/srw/sha256-19step-preimages-with-padding"
+references:
+  - type: software
+    title: "sha256-r19-preimage (Context Shaping for 19- and 20-Round SHA-256 Compression Preimages)"
+    authors:
+      - family-names: Basra
+        given-names: K. S.
+    repository-code: "https://github.com/kamb-code/sha256-r19-preimage"

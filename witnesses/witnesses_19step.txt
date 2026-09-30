@@ -1,0 +1,114 @@
+# 19-step SHA-256 preimages (standard IV, feed-forward, 19 of 64 steps).
+# Target of each witness = full 64-step SHA-256 of the ASCII label (nothing-up-my-sleeve).
+# padded: message bytes M (55 bytes) such that SHA256_19(M) = target, standard padding.
+# comp:   16 message words W such that compress_19(IV, W) + IV = target (no padding).
+
+[padded] label="padded test 1"
+  target      = 146f48dd2a3324d46feb7ad2069e05ddb9530be67f8f823f9d1c2ed3ea4f1d19
+  message_hex = a9cfb3f277e9e66e5a86ea3ff1dac69d3327b726deb9420583f150597ba70fa19cfc18400c1222c58d20911e6162081ebe084915634c3a
+  sha256_19   = 146f48dd2a3324d46feb7ad2069e05ddb9530be67f8f823f9d1c2ed3ea4f1d19   OK
+
+[comp] label="unpadded test 1"
+  target   = 9b746e6c51ff8a68c0ec9e616457bbf63915b28d9178e4b4a4202475806e3335
+  W[0..15] = dec66175 56b38d36 a74d6287 7a61f937 ef643759 a851dc16 9d5d2fc0 0004aec3 bc1470bb decb0237 0cba117d 74929c09 76a6997e 41cbeadd 5c368231 98aee3bc
+  c19+IV   = 9b746e6c51ff8a68c0ec9e616457bbf63915b28d9178e4b4a4202475806e3335   OK
+
+[padded] label="padded test 2"
+  target      = 4c51f9dde95fa3ec5545b46ca0f2d8968b2399f81f208e07304f4b00117c02df
+  message_hex = c13089d977eea9843460eb14fff02051a5cf91b4ffedf39711c2ec81862939f8adcc0dc25fb391e5c84ed20f8ef02e4a205578ea45e9fd
+  sha256_19   = 4c51f9dde95fa3ec5545b46ca0f2d8968b2399f81f208e07304f4b00117c02df   OK   (search 6.4s)
+
+[padded] label="padded test 3"
+  target      = cb9ace26d0eee1034f838de327a72598832bfa4fa1644493ad4ef004a5a2dab9
+  message_hex = e24cf94c817e32304c4162886506bdfa5d2766398d36171235b6e3fde064535456052c3022ef488175bbbd6b81085c86401df4e0dae715
+  sha256_19   = cb9ace26d0eee1034f838de327a72598832bfa4fa1644493ad4ef004a5a2dab9   OK   (search 59.7s)
+
+[padded] label="padded test 4"
+  target      = 90b183e68a4966c5c268807fe3f49a4f4cf890f9f25b00bb1f836552496192f4
+  message_hex = 3b605fe04bdf7b05dbcae817e1a77d8e7e9ad63db1fe8f5d972828874695dde35bcf2deb7166e78132c9ac7ee9f72d07190b83c398a2ed
+  sha256_19   = 90b183e68a4966c5c268807fe3f49a4f4cf890f9f25b00bb1f836552496192f4   OK   (search 73.7s)
+
+[padded] label="padded test 5"
+  target      = 286d96b78dc5b71f90b61e6374de3ffc82939941955e7b1c5d00fd9af345e80a
+  message_hex = 502eb30d876c48eaee8a13c08e4e15b5ac74689dfdf5e60cb2fd044d4bc8eaae640c92cf6236d908717a5842304f70d47fc4dddbe6d899
+  sha256_19   = 286d96b78dc5b71f90b61e6374de3ffc82939941955e7b1c5d00fd9af345e80a   OK   (search 4.9s)
+
+[padded] label="padded test 6"
+  target      = efa23b479b7518cb4117dfdf041a694b46441fa5796e6d4b8a7443a724a0d8f1
+  message_hex = 782f45dda1ab000aace616e7c3076339fe8938a6f0a35fc6ff0e2739c3194c08494e5b1a4af0b10e69d87a02352ddd71034511dba58e90
+  sha256_19   = efa23b479b7518cb4117dfdf041a694b46441fa5796e6d4b8a7443a724a0d8f1   OK   (search 6.4s)
+
+[padded] label="padded test 7"
+  target      = 2f507443a19f9f39300d5905b02aa1cd77c744f0424c684f75a5b2cc4a0516a8
+  message_hex = fb676bdeabfc0143be3d2b4c8350083e39b4aedcdfbf2b87c10c23786a901dc14ffc2879516522cbc86235d1a7bf135373355d0cf71888
+  sha256_19   = 2f507443a19f9f39300d5905b02aa1cd77c744f0424c684f75a5b2cc4a0516a8   OK   (search 70.8s)
+
+[padded] label="padded test 8"
+  target      = 1fad9d7e79a132660d8536e6b151a4cef494bdfdc2962e0f7bae20acd8aed5c8
+  message_hex = a1edbba02a9f54cf4083f7fc27156523f3acd5f52339e453c950d9ed841486dff2264d752bea2d27440984bd612c77f69b4479b63cde7f
+  sha256_19   = 1fad9d7e79a132660d8536e6b151a4cef494bdfdc2962e0f7bae20acd8aed5c8   OK   (search 17.2s)
+
+[padded] label="padded test 9"
+  target      = 849564c85e22852e6af2c6ec60bd891de79298bbc8d5106a221bca536a908d1f
+  message_hex = 0736a2716d8ee60644b77f1e85c91f230ed82d7f242ae673baeb3049b858b159e8d90ba74901bda34b0536a82b222f425f9533e25c727c
+  sha256_19   = 849564c85e22852e6af2c6ec60bd891de79298bbc8d5106a221bca536a908d1f   OK   (search 21.7s)
+
+[padded] label="padded test 10"
+  target      = 91e12eb79793591d6773d8c3b5090f07a69742c7031bbd514273c5de1c241c87
+  message_hex = a80e3ae94cb0c81f3e591bfd4453eba61c2148ab7d32f1e524c220134d9be8e12ee2beebfa02fb6bc994272b720842d68709f1e0023b79
+  sha256_19   = 91e12eb79793591d6773d8c3b5090f07a69742c7031bbd514273c5de1c241c87   OK   (search 44.8s)
+
+[padded] label="padded test 11"
+  target      = 7b66f998c1c60bdd65744e43b69190481502cee718245876fc2c535f4b7cf5a8
+  message_hex = 23ae3771d98d69c6925d4ca4b8059f84404eea570db3d014c022af5649565a9a19a0e610fdb9258ce144893cee5d25f260f11614b36253
+  sha256_19   = 7b66f998c1c60bdd65744e43b69190481502cee718245876fc2c535f4b7cf5a8   OK   (search 13.1s)
+
+[comp] label="unpadded test 2"
+  target   = fa961afa53aafcdad6c267808b49c71a567235c0e40b50e62dd7e87ef70af1ef
+  W[0..15] = 865f02bb f7796ef2 206d8140 343ce695 1299d6ed 0786cf12 e29fcf57 940a4992 3cc8df16 d9f86fa2 04dc629c 74e0ba11 f5cd5212 6583d096 b01422b3 a79f6772
+  c19+IV   = fa961afa53aafcdad6c267808b49c71a567235c0e40b50e62dd7e87ef70af1ef   OK   (search 0.2s)
+
+[comp] label="unpadded test 3"
+  target   = 29bfd8e031d0be2b391c6aa363b6cf985505d91e1d11bff37fa5621bcc03082b
+  W[0..15] = dc5d8cd9 2de15f2e 99414969 a058b418 9157c4c9 a83baa2b ec7d8bee 4e2de709 84e299ca 187792a6 1d275651 4ef1d93f d6bd7675 a1af392c c5736c6b 4af0f8c7
+  c19+IV   = 29bfd8e031d0be2b391c6aa363b6cf985505d91e1d11bff37fa5621bcc03082b   OK   (search 0.9s)
+
+[comp] label="unpadded test 4"
+  target   = 5519d174121488309510e2033a2d2f28eaa09224d492beee8d12b8a3d3b105cd
+  W[0..15] = 3f55035f e016282a a01c7bb7 3c4ba016 55328267 e7ce6293 9cf70957 2712944a 20e47783 df1a746f 096493d8 48e8f219 1ed3cee7 25c59eb9 f3044fb9 cf653bab
+  c19+IV   = 5519d174121488309510e2033a2d2f28eaa09224d492beee8d12b8a3d3b105cd   OK   (search 1.2s)
+
+[comp] label="unpadded test 5"
+  target   = 2d27ea897c5e1d940b6ce5a57f9798278127176ac936a2fe2f38352b20feb5d0
+  W[0..15] = 448d4dee b829f955 974a4aa6 91ba4b36 dd585bc7 14e1f9de 74552b99 8555e8bb 1fd155a0 7898a216 79d7c892 416865f3 3de3e95b a6ea7366 678d95e7 ce4d9440
+  c19+IV   = 2d27ea897c5e1d940b6ce5a57f9798278127176ac936a2fe2f38352b20feb5d0   OK   (search 1.6s)
+
+[comp] label="unpadded test 6"
+  target   = 3841741ff785d25fb276163c9ba419f7a1bd35a9982d5193a907f37b4c7ef55b
+  W[0..15] = 7b1725c2 0b414d1d 87dd6fb2 a916199e 1fba65c4 690f9441 f9c37eb4 1033dea9 cd4d6083 03113616 d565c07d 77a108c7 b150ec85 ab747ddd 52b49d15 50d378c2
+  c19+IV   = 3841741ff785d25fb276163c9ba419f7a1bd35a9982d5193a907f37b4c7ef55b   OK   (search 0.7s)
+
+[comp] label="unpadded test 7"
+  target   = 45d566a1204151f42dcaa45da620a9b94dcb58bde5890ca7cb40af5a124ce0af
+  W[0..15] = 4782bbf4 b736538e ebbf7c69 bc26c07e 7e0a99da 8c643b1c cd61bc0b 968500a9 1db10129 594fe357 c99bbbda 06fc3016 5a124dda 684f6e0f a6269b81 a8f454d7
+  c19+IV   = 45d566a1204151f42dcaa45da620a9b94dcb58bde5890ca7cb40af5a124ce0af   OK   (search 0.4s)
+
+[comp] label="unpadded test 8"
+  target   = 891dc1adb02995f394e0153791779526441ce1b135f9d88ca1401980e9aacdea
+  W[0..15] = 4a7a2d0e 4f9025fc 0ad6a67c 7abfc819 41e01978 d10bb2ea d7a3221d c471c200 3284e078 cd501c62 c9dab326 a23c157a 11409555 83162e3f 4f26d4dc 7985ff24
+  c19+IV   = 891dc1adb02995f394e0153791779526441ce1b135f9d88ca1401980e9aacdea   OK   (search 2.9s)
+
+[comp] label="unpadded test 9"
+  target   = add7f221c973705fe2ef373baacc0ecb904abf13eb3569e7da4cec8e752f7dfe
+  W[0..15] = 4fe93fdc fe898180 5a2783c4 52fb4ff2 8f5af709 62efe9bd 7dbea46c 874e48b7 ac4c310b f1d28f40 f41a318a 688f7883 02bfabc8 191b0011 ce5c1930 460d2fc7
+  c19+IV   = add7f221c973705fe2ef373baacc0ecb904abf13eb3569e7da4cec8e752f7dfe   OK   (search 0.2s)
+
+[comp] label="unpadded test 10"
+  target   = 4a2dc64f7cc9be097cca66659ba68515c512f0151b1acae236549b9857b6eadc
+  W[0..15] = c924289e 8a110eaa 499670da 40cd30f4 0173dc9a 5cbf6bd2 a38dcd2c 1d1ad8d6 2f2f3a4f 7fc13951 759ec032 ce5557df 0d44766b ba93e831 cad6cbc0 27e33bca
+  c19+IV   = 4a2dc64f7cc9be097cca66659ba68515c512f0151b1acae236549b9857b6eadc   OK   (search 1.2s)
+
+[comp] label="unpadded test 11"
+  target   = 9dc68129573d3a518123ae478eed5db49eada79cf9cf06efb08ffef22b321c69
+  W[0..15] = cc7d3d0b 5f852b12 bad0363c 49d5f150 ccca6c60 e11a11ca 8b037886 d045d482 842c3948 7b2f7fd3 1afcc35d d4d1ef70 12332ae5 33318d1a 595acdbf c2096854
+  c19+IV   = 9dc68129573d3a518123ae478eed5db49eada79cf9cf06efb08ffef22b321c69   OK   (search 2.6s)

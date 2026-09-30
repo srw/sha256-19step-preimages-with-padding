@@ -1,0 +1,7 @@
+[padded] label="hand-off cross-check 2026-09-29"
+  target      = d374822f21eb0d4dbc809ae0443c2c6c66f8ce5d07c8779bcc5fc7849f44e3c2
+  message_hex = 6e77d54453883692c4e2fbf20d290ce36ee98f42748f7c618cd07a0d19b36b5a43c25fa3b008d57af11dbc2dabc843dae6117a0f867286
+
+[comp] label="hand-off cross-check 2026-09-29"
+  target   = d374822f21eb0d4dbc809ae0443c2c6c66f8ce5d07c8779bcc5fc7849f44e3c2
+  W[0..15] = 352ad731 2bf2d607 38c8cefd fc1c3632 74f9c6d4 3724ee39 ac2293c3 eb9d1234 ea35ce63 c2aa1d3c ef70050d 78dcef7d e20398d5 d4df7523 06846dae 616f012d

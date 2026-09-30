@@ -1,0 +1,30 @@
+FOUND ok=1 mode=comp target=0 contexts_tried=1 contexts_used=1 chains=461260 search_time=0.2s
+W = 865f02bb f7796ef2 206d8140 343ce695 1299d6ed 0786cf12 e29fcf57 940a4992 3cc8df16 d9f86fa2 04dc629c 74e0ba11 f5cd5212 6583d096 b01422b3 a79f6772
+H19=fa961afa53aafcdad6c267808b49c71a567235c0e40b50e62dd7e87ef70af1ef
+FOUND ok=1 mode=comp target=1 contexts_tried=1 contexts_used=1 chains=1736512 search_time=0.9s
+W = dc5d8cd9 2de15f2e 99414969 a058b418 9157c4c9 a83baa2b ec7d8bee 4e2de709 84e299ca 187792a6 1d275651 4ef1d93f d6bd7675 a1af392c c5736c6b 4af0f8c7
+H19=29bfd8e031d0be2b391c6aa363b6cf985505d91e1d11bff37fa5621bcc03082b
+FOUND ok=1 mode=comp target=2 contexts_tried=1 contexts_used=1 chains=2316589 search_time=1.2s
+W = 3f55035f e016282a a01c7bb7 3c4ba016 55328267 e7ce6293 9cf70957 2712944a 20e47783 df1a746f 096493d8 48e8f219 1ed3cee7 25c59eb9 f3044fb9 cf653bab
+H19=5519d174121488309510e2033a2d2f28eaa09224d492beee8d12b8a3d3b105cd
+FOUND ok=1 mode=comp target=3 contexts_tried=1 contexts_used=1 chains=3122222 search_time=1.6s
+W = 448d4dee b829f955 974a4aa6 91ba4b36 dd585bc7 14e1f9de 74552b99 8555e8bb 1fd155a0 7898a216 79d7c892 416865f3 3de3e95b a6ea7366 678d95e7 ce4d9440
+H19=2d27ea897c5e1d940b6ce5a57f9798278127176ac936a2fe2f38352b20feb5d0
+FOUND ok=1 mode=comp target=4 contexts_tried=1 contexts_used=1 chains=1295431 search_time=0.7s
+W = 7b1725c2 0b414d1d 87dd6fb2 a916199e 1fba65c4 690f9441 f9c37eb4 1033dea9 cd4d6083 03113616 d565c07d 77a108c7 b150ec85 ab747ddd 52b49d15 50d378c2
+H19=3841741ff785d25fb276163c9ba419f7a1bd35a9982d5193a907f37b4c7ef55b
+FOUND ok=1 mode=comp target=5 contexts_tried=1 contexts_used=1 chains=708879 search_time=0.4s
+W = 4782bbf4 b736538e ebbf7c69 bc26c07e 7e0a99da 8c643b1c cd61bc0b 968500a9 1db10129 594fe357 c99bbbda 06fc3016 5a124dda 684f6e0f a6269b81 a8f454d7
+H19=45d566a1204151f42dcaa45da620a9b94dcb58bde5890ca7cb40af5a124ce0af
+FOUND ok=1 mode=comp target=6 contexts_tried=1 contexts_used=1 chains=5648485 search_time=2.9s
+W = 4a7a2d0e 4f9025fc 0ad6a67c 7abfc819 41e01978 d10bb2ea d7a3221d c471c200 3284e078 cd501c62 c9dab326 a23c157a 11409555 83162e3f 4f26d4dc 7985ff24
+H19=891dc1adb02995f394e0153791779526441ce1b135f9d88ca1401980e9aacdea
+FOUND ok=1 mode=comp target=7 contexts_tried=1 contexts_used=1 chains=389064 search_time=0.2s
+W = 4fe93fdc fe898180 5a2783c4 52fb4ff2 8f5af709 62efe9bd 7dbea46c 874e48b7 ac4c310b f1d28f40 f41a318a 688f7883 02bfabc8 191b0011 ce5c1930 460d2fc7
+H19=add7f221c973705fe2ef373baacc0ecb904abf13eb3569e7da4cec8e752f7dfe
+FOUND ok=1 mode=comp target=8 contexts_tried=1 contexts_used=1 chains=2275730 search_time=1.2s
+W = c924289e 8a110eaa 499670da 40cd30f4 0173dc9a 5cbf6bd2 a38dcd2c 1d1ad8d6 2f2f3a4f 7fc13951 759ec032 ce5557df 0d44766b ba93e831 cad6cbc0 27e33bca
+H19=4a2dc64f7cc9be097cca66659ba68515c512f0151b1acae236549b9857b6eadc
+FOUND ok=1 mode=comp target=9 contexts_tried=1 contexts_used=1 chains=5082637 search_time=2.6s
+W = cc7d3d0b 5f852b12 bad0363c 49d5f150 ccca6c60 e11a11ca 8b037886 d045d482 842c3948 7b2f7fd3 1afcc35d d4d1ef70 12332ae5 33318d1a 595acdbf c2096854
+H19=9dc68129573d3a518123ae478eed5db49eada79cf9cf06efb08ffef22b321c69

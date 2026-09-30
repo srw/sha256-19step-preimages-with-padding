@@ -1,0 +1,3 @@
+FOUND ok=1 mode=padded target=0 contexts_tried=78575890 contexts_used=1 chains=558089 search_time=1.2s
+W = 8ca254f8 d04dd3fb 04efaad6 b1867588 ffe833de 49a144fe dbf18394 22892dc9 f5a9158d 8fc06329 0a14a9a6 c55dfa24 5642a024 7ec45a80 00000000 000001b8
+H19=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad

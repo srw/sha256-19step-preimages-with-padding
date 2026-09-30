@@ -1,0 +1,50 @@
+# recheck_all.py
+ours: 22 witnesses; demos: 2; verifier: 45; total OK 69, FAIL 0
+
+# verify_standalone.py witnesses_19step.txt
+verified 22 witnesses, 0 failures (64-step sanity check vs hashlib passed)
+
+# independent verifier's v1.py on the fresh witnesses
+padded   hand-off cross-check 2026-09-29 len=55 label_ok=True d19_ok=True d18!=t:True d20!=t:True d64!=t:True W13&ff=80 W14=0 W15=440  OK
+comp     hand-off cross-check 2026-09-29 label_ok=True c19+IV_ok=True d18!=t:True d20!=t:True  OK
+padded witnesses: 1, comp witnesses: 1, failures: 0 []
+
+# validate_chain.py
+D=0x00000000: identity violations in 2000 random early assignments: 0
+D=0x00000001: identity violations in 2000 random early assignments: 0
+D=0x80000400: identity violations in 2000 random early assignments: 0
+D=0x0f0f0000: identity violations in 2000 random early assignments: 0
+P(R=0) empirical 8.00e-05  vs (3/4)^32 = 1.00e-04
+
+# r20_split.py
+part 1: split identity, 4000 random (context, chain) samples x 4 constraints: 0 violations
+part 2: context side, one flipped bit of a free word -> mean bits changed in the interface
+   word    T16    T17    T18    T19   | flips with T16..T18 unchanged | min HW(dT16..dT18)
+   a5(=a6) 15.80  12.24  15.79  14.25   |    0 / 500                  | 28
+   a7      14.58  11.19  14.56  11.61   |    0 / 500                  | 16
+   a8      16.22  15.96  15.94  15.96   |    0 / 500                  | 34
+   a11     13.06  15.09  13.64  15.79   |    0 / 500                  | 24
+   a12     16.00  12.96  15.23  14.47   |    0 / 500                  | 25
+(1.4 s)
+
+# recheck_v2.py
+1. sha2fam.validate(): (64, 64)
+2. exact inversion, r = 1..8: 2000/2000 messages recovered exactly
+3. forced flips (b in 25..31 -> bit b-25 of a_(j+2) and e_(j+2)), j in {0,5,11,15}: 8400/8400 held
+
+# sha_bias 0 31 26 929 (2^26 pairs), summarized
+tau=3: max eps=|2P-1| = 0.87898 (2^-0.19), z = eps*sqrt(N) = 7200.6, bit 32
+tau=4: max eps=|2P-1| = 0.14583 (2^-2.78), z = eps*sqrt(N) = 1194.7, bit 44
+tau=5: max eps=|2P-1| = 0.00416 (2^-7.91), z = eps*sqrt(N) = 34.1, bit 44
+tau=6: max eps=|2P-1| = 0.00033 (2^-11.56), z = eps*sqrt(N) = 2.7, bit 49
+tau=7: max eps=|2P-1| = 0.00031 (2^-11.64), z = eps*sqrt(N) = 2.6, bit 31
+tau=8: max eps=|2P-1| = 0.00025 (2^-11.95), z = eps*sqrt(N) = 2.1, bit 52
+
+# verifier B's v1.py on witnesses_19step.txt (our 22 archived witnesses)
+padded witnesses: 11, comp witnesses: 11, failures: 0 []
+
+# hand-off.md witness block (section 3.4), three checks
+hand-off reference code: witnesses verified = 26 (each also fails at R = 18 and R = 20)
+verify_standalone.py on the same block: OK = 26
+# verifier B's v1.py on the hand-off block (it parses [padded] and [comp] only, so the 2-block demo is skipped)
+padded witnesses: 13, comp witnesses: 12, failures: 0 []
