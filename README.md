@@ -240,8 +240,9 @@ Two further points about Basra's earlier work, because they are not visible in h
   README at commit `102f701` (2026-09-10) said: "No padded SHA-256 preimage is claimed." So the
   closed-form handling of the length words is his observation; we carried it over to the shaped
   setting, where the third word cannot be pinned and becomes a filter.
-- That history is no longer in the public repository, which has been a single commit (`f75b87a`,
-  2026-09-30) since the end of September. His current manuscript still says: "Although the repository
+- That history is no longer in the public repository, which today is a single commit (`f75b87a`,
+  dated 2026-09-30). We read the earlier history (HEAD `102f701`) on 2026-09-28/29 and do not know
+  how or when it was removed. His current manuscript still says: "Although the repository
   contains an exploratory closed-form way to impose those word values, no padded preimage was
   obtained; we make no padded-hash claim." (`paper_r19_final.tex`). We hold a copy of the earlier
   history; ask us if you need to check these statements.
