@@ -230,7 +230,7 @@ no route:
 
 | steps | object | who | method and cost |
 |---|---|---|---|
-| 16 | hash function, with padding | Homsirikamol, Morawiecki, Rogawski, Srebrny, CISIM 2012 (ePrint 2012/421) | SAT, about an hour. This is the reading of the 2026-10-13 audit (its Sections 2.2 and 3 and Table 1; Table 3 separately covers the compression function). We could not open the paper ourselves, so the earlier label "compression function" in this table was unsupported, and this one is unverified by us. |
+| 16 | hash function, with padding | Homsirikamol, Morawiecki, Rogawski, Srebrny, CISIM 2012 (ePrint 2012/421) | SAT (CryptoMiniSat 2.9.0), about one hour on a 2.67 GHz Core i7; a 30-hour limit did not reach a 17th round. We read the ePrint version ("Extension", 20 pages) on 2026-10-13. Section 2.2 fixes the hash and the padding bits in a single 512-bit block with the message length set to 446 bits; Table 1 gives SHA-256 at 16 of 64 rounds; Table 3 lists the compression function separately (also 16). The paper does not say how its target digests were chosen and prints no message, so the result cannot be re-checked from the paper. Its message is a 446-bit string, not a whole number of bytes. |
 | 17–18 | compression function, all-zero digest | Davydov et al. 2025 (abstract read 2026-10-13: "17- and 18-round SHA-256 compression functions", plus a weakened 19-round problem) | SAT |
 | 19 | compression function | Zaikin, *Constraints*, Jan 2026 (preprint read; padding removed; Table 7 witness re-verified) | cube-and-conquer SAT, one all-ones target, 18 h 33 min on 192 cores |
 | 19 | compression function | Basra, 2026 (unpublished; repository) | algebraic; GPU; then context shaping, ~12 ms marginal with a 16 GiB table |

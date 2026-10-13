@@ -38,7 +38,7 @@ digest under H19. It is not an H19 collision with "abc", because H19("abc") is a
 
 | steps | object | work |
 |---|---|---|
-| 16 | hash function, with padding | Homsirikamol, Morawiecki, Rogawski, Srebrny, CISIM 2012 (SAT). This is the reading of an independent reviewer; we could not open the paper ourselves. |
+| 16 | hash function, with padding (one block, 446-bit message) | Homsirikamol, Morawiecki, Rogawski, Srebrny, CISIM 2012, ePrint 2012/421 (SAT, CryptoMiniSat 2, about an hour on a 2.67 GHz Core i7). We read the ePrint version on 2026-10-13; it does not say how its targets were chosen and prints no message. |
 | 17–18 | compression function, all-zero digest | Davydov et al., 2025 (SAT) |
 | 19 | compression function | Zaikin, *Constraints* 2026 (SAT, one all-ones target, 18 h 33 min on 192 cores); Basra 2026 (algebraic) |
 | 20 | compression function | Basra 2026 (GPU, about 2^45.4 table lookups) |
@@ -204,7 +204,8 @@ Full text: `docs/NOTE.md`.
   solver on 12 new targets including all-ones and all-zeros, and listed corrections to this
   repository's text: the classification of Homsirikamol et al. 2012, the cost model for soft
   shaping, the timing datasets, the "never run" wording for the meet-in-the-middle line, and the
-  second-preimage wording. They are applied here. We then wrote a third implementation, replayed
+  second-preimage wording. They are applied here; the repository owner then supplied the Homsirikamol
+  et al. paper, and it confirms the audit's reading (padded, 16 rounds). We then wrote a third implementation, replayed
   the audit's 12 targets on a different platform (identical messages and counters), solved 10 more
   new labels, and found the audit's cost-model correction visible in the data
   (`checks/recheck_2026-10-13/results.txt`). These are computational cross-checks by AI agents, not
