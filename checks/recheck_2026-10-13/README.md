@@ -25,6 +25,10 @@ here is standard-library Python except the solver, which is `src/pre19.c` unchan
    o = popcount(a_5 and D). Among the 30 witnesses with k = 3 the mean of o is 1.00, as the exact joint
    acceptance probability predicts for successful contexts, against 1.50 without the correction.
 5. `scripts/my_pool_stats.py`: per-dataset timing and work per solution.
+6. `scripts/my_mcdair_check.py`: recomputes the three padded messages (31, 55 and 55 bytes) in McDair's
+   28 March 2024 mailing-list post. Each equals the post's challenge digest `deb360ae...6b85` at exactly
+   17 steps and at no other step count from 1 to 64; the digest is not SHA-256("McDair"). Output:
+   `results_mcdair.txt`.
 
 `results.txt` has the output of all of these, run from the repository root:
 
@@ -36,6 +40,7 @@ here is standard-library Python except the solver, which is `src/pre19.c` unchan
     python3 -I checks/recheck_2026-10-13/scripts/my_ko_stats.py witnesses \
         checks/recheck_2026-10-13/timing/xeon_replay_of_audit_manifest.out \
         checks/recheck_2026-10-13/timing/xeon_new_labels.out
+    python3 -I checks/recheck_2026-10-13/scripts/my_mcdair_check.py
 
 To rerun the solver (about 2.1 GiB of RAM): `gcc -O3 -march=native -o pre19 src/pre19.c`, then
 `./pre19 padded <targets, comma separated> 29 <seed> 3 26`. The seed of the replay is in the audit's

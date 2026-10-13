@@ -231,15 +231,20 @@ no route:
 | steps | object | who | method and cost |
 |---|---|---|---|
 | 16 | hash function, with padding | Homsirikamol, Morawiecki, Rogawski, Srebrny, CISIM 2012 (ePrint 2012/421) | SAT (CryptoMiniSat 2.9.0), about one hour on a 2.67 GHz Core i7; a 30-hour limit did not reach a 17th round. We read the ePrint version ("Extension", 20 pages) on 2026-10-13. Section 2.2 fixes the hash and the padding bits in a single 512-bit block with the message length set to 446 bits; Table 1 gives SHA-256 at 16 of 64 rounds; Table 3 lists the compression function separately (also 16). The paper does not say how its target digests were chosen and prints no message, so the result cannot be re-checked from the paper. Its message is a 446-bit string, not a whole number of bytes. |
+| 17 | hash function, with padding (31, 55 and 55 bytes) | McDair, *cryptography* mailing list, 28 March 2024 (`2024-March/038315.html`; not peer-reviewed) | no method described. We recomputed the three messages with our own SHA-256: each equals the post's challenge digest `deb360ae...6b85` at exactly 17 steps (`checks/recheck_2026-10-13/results_mcdair.txt`) |
 | 17–18 | compression function, all-zero digest | Davydov et al. 2025 (abstract read 2026-10-13: "17- and 18-round SHA-256 compression functions", plus a weakened 19-round problem) | SAT |
 | 19 | compression function | Zaikin, *Constraints*, Jan 2026 (preprint read; padding removed; Table 7 witness re-verified) | cube-and-conquer SAT, one all-ones target, 18 h 33 min on 192 cores |
 | 19 | compression function | Basra, 2026 (unpublished; repository) | algebraic; GPU; then context shaping, ~12 ms marginal with a 16 GiB table |
 | 20 | compression function | Basra, Sept 2026 (unpublished; all-ones witness re-verified) | context shaping, ~2^45.4, 2.45 and 16.2 GPU-hours |
 | **19** | **hash function with padding** | **this note** | **context shaping plus soft shaping plus W_13 filter; medians of 7–22 s on one CPU core** |
 
-An unverified claim also exists of padded preimages at 17 rounds (McDair, *cryptography* mailing
-list, April 2024; the post names a target but gives no witness, and the replies dispute terminology
-rather than showing a concrete mismatch). It is below 19 steps and we have not validated it.
+The McDair post (subject "SHA-256 challenge", Thu 28 March 2024) gives three padded messages for
+the digest `deb360ae...6b85`: 31, 55 and 55 bytes. They are valid padded
+preimages of that digest at 17 steps (checked above). The post also
+makes claims at 64 rounds about the compression function without padding, which we did not evaluate,
+and it describes no method, so we cannot say whether it extends to more steps. The only peer-reviewed padded
+result we know of is the 16-step one above. We know of no padded result above 17 steps; this is a statement
+about what we found, not a proof of priority.
 
 The theoretical line (meet-in-the-middle and bicliques) reaches 46 and 47 steps (Guo, Li, Liu, Wang
 and Zhang, EUROCRYPT 2026, ePrint 2026/353). Its Table 1 gives, for 46 steps, a pseudo-preimage cost of

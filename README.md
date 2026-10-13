@@ -39,6 +39,7 @@ digest under H19. It is not an H19 collision with "abc", because H19("abc") is a
 | steps | object | work |
 |---|---|---|
 | 16 | hash function, with padding (one block, 446-bit message) | Homsirikamol, Morawiecki, Rogawski, Srebrny, CISIM 2012, ePrint 2012/421 (SAT, CryptoMiniSat 2, about an hour on a 2.67 GHz Core i7). We read the ePrint version on 2026-10-13; it does not say how its targets were chosen and prints no message. |
+| 17 | hash function, with padding (messages of 31, 55 and 55 bytes) | McDair, *cryptography* mailing list, 28 March 2024 (not peer-reviewed; no method described; we recomputed all three at 17 steps) |
 | 17–18 | compression function, all-zero digest | Davydov et al., 2025 (SAT) |
 | 19 | compression function | Zaikin, *Constraints* 2026 (SAT, one all-ones target, 18 h 33 min on 192 cores); Basra 2026 (algebraic) |
 | 20 | compression function | Basra 2026 (GPU, about 2^45.4 table lookups) |
@@ -48,10 +49,15 @@ To our knowledge, as of 2026-10-13, this is the first publicly documented comput
 256-bit preimages for SHA-256 reduced to its first 19 steps with the standard IV and padding. That is
 a statement about what we could find, not a proof of priority. Our searches (general web search and
 the reference lists of the papers above) did not cover CNKI, Wanfang, CiNii, RISS, ProQuest or
-Russian thesis databases, which we could not access. We also know
-of an unverified 2024 mailing-list claim of padded preimages at 17 rounds (McDair, *cryptography*
-list, April 2024; no witness is given in the post). If you know of earlier work, please open an
-issue and we will correct this.
+Russian thesis databases, which we could not access. We also know of three padded 17-step
+preimages posted to the *cryptography* mailing list by McDair on 28 March 2024 ("SHA-256 challenge",
+`2024-March/038315.html`): one message of 31 bytes and two of 55 bytes, all for the digest
+`deb360ae...6b85`. We recomputed them with our own SHA-256 (`checks/recheck_2026-10-13/results_mcdair.txt`):
+each equals that digest at exactly 17 steps, with the standard IV and padding. The post describes no
+method. It also makes claims at 64 rounds about the compression function without padding, which we
+did not evaluate. The only peer-reviewed padded result we know of is at 16 steps (Homsirikamol et al.),
+and we know of no padded result above 17 steps. If you know of earlier work, please open an issue
+and we will correct this.
 
 The theoretical meet-in-the-middle line reaches 46 and 47 steps (Guo, Li, Liu, Wang, Zhang,
 EUROCRYPT 2026; preimage cost about 2^254.5 and 2^255.6). Its authors implemented a 44-step version
@@ -208,8 +214,9 @@ Full text: `docs/NOTE.md`.
   et al. paper, and it confirms the audit's reading (padded, 16 rounds). We then wrote a third implementation, replayed
   the audit's 12 targets on a different platform (identical messages and counters), solved 10 more
   new labels, and found the audit's cost-model correction visible in the data
-  (`checks/recheck_2026-10-13/results.txt`). These are computational cross-checks by AI agents, not
-  human peer review.
+  (`checks/recheck_2026-10-13/results.txt`). We also recomputed the three 17-step padded messages in
+  McDair's 2024 mailing-list post (see above; `results_mcdair.txt`). These are computational
+  cross-checks by AI agents, not human peer review.
 
 ## How this was produced
 

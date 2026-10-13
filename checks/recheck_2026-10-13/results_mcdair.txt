@@ -1,0 +1,6 @@
+challenge digest         : deb360ae3c1ff7a29f83731b33dcd4bf354a5e80de2dc50370ebf55a14216b85
+SHA-256("McDair") (64)   : 5d1c3d285cc5150a7bcc780e94be71d876e6dc27ab9a2d5b578e8f43c592e35c (different, so the challenge is not the hash of the name)
+example 1: 31 bytes; 17-step digest deb360ae...6b85 (64/64 hex digits equal); step counts 1..64 that equal the challenge: [17]; 64-step SHA-256 = ab46701b226ca9a1... (not the challenge)
+example 2: 55 bytes; 17-step digest deb360ae...6b85 (64/64 hex digits equal); step counts 1..64 that equal the challenge: [17]; 64-step SHA-256 = 53aa43d0a54b73b5... (not the challenge)
+example 3: 55 bytes; 17-step digest deb360ae...6b85 (64/64 hex digits equal); step counts 1..64 that equal the challenge: [17]; 64-step SHA-256 = a1d45f3653c0a927... (not the challenge)
+all three match the challenge at exactly 17 steps: True
