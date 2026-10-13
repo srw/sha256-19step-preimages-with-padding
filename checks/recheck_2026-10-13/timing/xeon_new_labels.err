@@ -1,0 +1,7 @@
+table built: 2^29 entries (27.4 s)
+context 1 exhausted (chains so far 67108864, 45.0s)
+
+real	3m32.335s
+user	3m22.982s
+sys	0m2.985s
+exit=0
