@@ -244,5 +244,6 @@ Two further points about Basra's earlier work, because they are not visible in h
   dated 2026-09-30). We read the earlier history (HEAD `102f701`) on 2026-09-28/29 and do not know
   how or when it was removed. His current manuscript still says: "Although the repository
   contains an exploratory closed-form way to impose those word values, no padded preimage was
-  obtained; we make no padded-hash claim." (`paper_r19_final.tex`). We hold a copy of the earlier
-  history; ask us if you need to check these statements.
+  obtained; we make no padded-hash claim." (`paper_r19_final.tex`). We hold a shallow copy of the
+  earlier history (the last 50 commits up to `102f701`, from 2026-08-07; earlier commits, if any,
+  were never fetched); ask us if you need to check these statements.
