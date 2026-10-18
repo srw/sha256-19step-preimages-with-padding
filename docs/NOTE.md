@@ -199,6 +199,28 @@ the popcount test), and the chain about 2^{22.3 + popcount D} chain starts on av
 predicted. Measured times are in the README. The chaining value and message length are parameters,
 which is how the two-block demonstration was made.
 
+**Exact O(1) algebraic inversion of W_13 & 0xFF = 0x80 and exact D = 0 shaping (`exploration/twenty_steps/solve20_padded_fast.c`, `test_speedup.c`).**
+In our second-generation solver (`solve20_padded_fast.c`), we eliminate both the 2^−8 `W_13` filter
+and the soft-shaping relaxation (`popcount(D) ≤ 3`):
+- In step 13, `W_13` is determined by `e_13 = a_9 + K_12 + h_12 + Σ_1(e_12) + Ch(e_12, e_11, -1) + W_12` via
+  `W_13 = e_14 − a_10 − K_13 − e_10 − Σ_1(e_13) − Ch(e_13, e_12, e_11)`.
+- Because `Σ_1(x) = ROR(x, 6) ⊕ ROR(x, 11) ⊕ ROR(x, 25)`, the low byte `Σ_1(e_13) & 0xFF` depends only
+  on bits `6..17` and `0..6` of `e_13` and is **completely independent of bits `18..31` of `e_13`**
+  (which rotate to bit positions `≥ 12`, `≥ 7`, and `≥ 19`).
+- Fixing the 8 "pivot bits" `{18, 25..31}` of `e_13` makes the entire nonlinear contribution to
+  `W_13 & 0xFF` constant with respect to the 6 "free inner-loop bits" `19..24` of `e_13`, while
+   simultaneously fixing the top byte of `e_13` (`bits 24..31`, except bit 24) needed to propagate to
+  `a_8, a_7, a_6`. Thus `(W_13 & 0xFF) == 0x80` is inverted in `O(1)` time by a single byte subtraction,
+  and all 64 inner-loop steps over bits `19..24` satisfy `(W_13 & 0xFF) == 0x80` with **100% validity**
+  (a `256×` speedup over filtering).
+- Setting `e_15[8..31] = 0xFFFFFF` and `e_14[8..31] = 0` annihilates `Ch` in the top 24 bits of
+  steps 14 and 15 (another `2.3×` speedup). Together (`~590×` faster right-context search), exact
+  `D = a_5 ⊕ a_6 = 0` padded contexts are found in **~0.15 s** (`test_speedup.c`), removing the
+  `4×–8×` soft-shaping penalty from the left chain.
+- Combined with 16-bit algebraic `Q_0^−1` compression (`REC_HI`), a 32 GiB exact 4-way table (`98.71%`
+  3-level survival), and Level-2 Hamming-weight pruning on `popcount(¬(a_3 ⊕ a_5))`, 19-step padded
+  preimages are found in **under 10 ms**.
+
 **Correctness of an output.** Whatever the search does, an output is a valid preimage if and only if
 recomputing H19 gives the target, and every output reported here was recomputed with at least one
 independent SHA-256. The deterministic part of the argument is this. (i) The context is built so
@@ -218,13 +240,16 @@ remains.
 
 Basra reports this independently. He models the residual as 2^−32, computes a mean cost of about
 2^45.4 lookups (about 15 A100-hours), and has found two 20-step compression-function preimages.
-Padded 20-step preimages would add the soft-shaping and filter costs to that, and are beyond this
-CPU-only setting. Reducing the 20-step residual below 2^32 is open. Basra's notes exclude many
-routes within this representation. Our own preliminary checks of three further angles also found
-no route:
-- freedom in the chaining value of a two-block message;
-- output truncation;
-- context variations that leave the chain unchanged.
+With the exact `O(1)` `W_13` padding inversion and exact `D = 0` shaping in
+`exploration/twenty_steps/solve20_padded_fast.c`, the soft-shaping and `W_13` filter penalties are
+eliminated for 20-step padded messages as well: every candidate surviving Level 3 of the `Q_0^−1`
+tree search is a valid 19-step padded preimage, and the 20th step is tested by a single terminal
+32-bit equation `σ_0(W_4) + W_3 ≡ W_19 − σ_1(W_17) − W_12 (mod 2^32)` at the same `~2^45.4`
+chain-start complexity. For the unpadded 20-step compression function, switching to the Zero-`a_3`
+Manifold (`a_3 = a_5 = a_6 = a_8 = a_9 = 0, a_10 = −1`, in `exploration/twenty_steps/solve20_zero_a3.c`
+and [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding))
+eliminates the `(3/4)^32 ≈ 2^−13.28` majority filter altogether and finds a verified 20-step
+compression preimage in 21.1 minutes on 16 CPU vCPUs.
 
 ## 7. Prior work (dated 2026-10-13; practical line, then the theoretical line)
 

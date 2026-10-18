@@ -175,22 +175,37 @@ Full text: `docs/NOTE.md`.
 4. **Padding.**
    - The two length words are absorbed in closed form (Basra's earlier observation, carried over to
      the shaped setting).
-   - The 0x80 end-marker byte becomes an 8-bit filter (added here).
-   - The shaping condition a_5 = a_6 is expensive to impose exactly once padding has used up the
-     free context words: about 2^32 context trials per usable context, against about 2^20 for the
-     relaxed version. We therefore relax it to "differs in at most 3 bits" (added here). On average
-     that costs a factor 2^popcount in extra chain starts; the exact factor for a given context
-     depends on how many of the differing bits are set in a_5 (docs/NOTE.md §5).
+   - **First-generation solver (`src/pre19.c`):** The `0x80` end-marker byte is treated as an 8-bit
+     filter (`2^-8`), and `a_5 = a_6` is relaxed to "soft shaping" (`popcount(a_5 ^ a_6) <= 3`) so
+     contexts can be found in `~2^27.6` trials, at the cost of a `2^popcount` factor in chain starts.
+   - **Exact algebraic inversion & exact `D = 0` shaping (`exploration/twenty_steps/solve20_padded_fast.c`,
+     `test_speedup.c`):** Because `Sigma1(e_13) & 0xff` is independent of bits `18..31` of `e_13`
+     (which rotate to bit positions `>= 12, >= 7, >= 19`), fixing the 8 pivot bits `18, 25..31` of `e_13`
+     Allows solving `(W_13 & 0xff) == 0x80` in `O(1)` time by a single byte lookup while stepping the
+     6 free bits `19..24` inside the inner loop (`256x` faster, `100%` branchless validity). Combined
+     with algebraic `Ch`-annihilation (`e_15[8..31] = 0xffffff`, `e_14[8..31] = 0`, another `2.3x`),
+     this finds **exact `D = a_5 ^ a_6 = 0` padded contexts in ~0.15 s**, completely eliminating the
+     soft-shaping penalty. With 16-bit algebraic `Q_0^-1` table compression (`REC_HI`), a 32 GiB
+     4-way exact table (`98.71%` 3-level chain survival), and Level-2 Hamming-weight pruning on
+     `popcount(~(a_3 ^ a_5))`, 19-step padded preimages are generated in **under 10 ms** (hundreds
+     per second on 16 cores), and the 20th padded step reduces to a single terminal 32-bit check
+     `sigma0(W_4) + W_3 == W_19 - sigma1(W_17) - W_12` on the stream of 19-step padded solutions at
+     `~2^45.4` expected chain starts.
 
 ## Scope and limits
 
-- **19 steps only (for padded messages).** At 20 steps, only compression-function results exist so far.
+- **19 steps (demonstrated padded witnesses) and 20 steps (unpadded witness + unified padded solver).**
   While `exploration/twenty_steps/r20_split.py` recorded why keeping the 19-step shaping (`a5 = a6`,
-  `e9 = e10 = -1`) makes going below Basra's ≈2^45.4 hard, switching to the Zero-$a_3$ Manifold
-  (`a3 = a5 = a6 = a8 = a9 = 0, a10 = -1`, in `exploration/twenty_steps/solve20_zero_a3.c` and the
-  companion repository [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding))
-  eliminates the $(3/4)^{32} \approx 2^{-13.28}$ residual filter and solves the 20-step compression
-  function in ~2^33 (21.1 min on 16 CPU vCPUs).
+  `e9 = e10 = -1`) makes going below Basra's ≈2^45.4 hard:
+  - For **20-step unpadded compression**, switching to the Zero-$a_3$ Manifold (`a3 = a5 = a6 = a8 = a9 = 0,
+    a10 = -1`, in `exploration/twenty_steps/solve20_zero_a3.c` and the companion repository
+    [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding))
+    eliminates the $(3/4)^{32} \approx 2^{-13.28}$ residual filter and solves the 20-step compression
+    function in ~2^33 (21.1 min on 16 CPU vCPUs).
+  - For **19- and 20-step padded messages**, `exploration/twenty_steps/solve20_padded_fast.c` removes the
+    soft-shaping and `W_13` filter penalties via exact `O(1)` algebraic padding inversion (`D = 0`),
+    producing 19-step padded preimages in milliseconds and reducing 20-step padded preimage search to
+    the same `~2^45.4` chain-start regime as unpadded context shaping.
 - **Message length.** Padded mode handles final blocks carrying 55 bytes (total length ≡ 55 mod
   64). That is enough for preimages, since the attacker chooses the message.
 - **Second preimages.** Because the target can be any 256-bit value, one can take any message M' of
@@ -233,12 +248,12 @@ the witnesses are self-verifying, and corrections are welcome.
 
 | path | contents |
 |---|---|
-| `src/` | `pre19.c` (solver), `aseq.py` (a-sequence toolkit), `validate_chain.py` (numerical check of the key identities) |
+| `src/` | `pre19.c` (first-generation solver), `aseq.py` (a-sequence toolkit), `validate_chain.py` (numerical check of the key identities) |
 | `verify/` | stdlib verifier, and an independently written checker |
 | `witnesses/` | all witnesses and raw solver logs |
 | `docs/NOTE.md` | technical note: method, proof, costs, prior work |
 | `checks/` | re-check logs; `recheck_2026-10-13/` has an independent SHA-256, witness counts, the 22 new solves and their statistics |
-| `exploration/twenty_steps/` | preliminary 20-step split analysis and `solve20_zero_a3.c` (Zero-$a_3$ Bi-Directional Bridge solver; full repo at [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding)) |
+| `exploration/twenty_steps/` | `solve20_padded_fast.c` & `test_speedup.c` (exact `O(1)` `W_13` padding inversion, exact `D = 0` shaping, `<10 ms` 19-step padded & unified 20-step padded solver), `solve20_padded.c`, preliminary 20-step split analysis, and `solve20_zero_a3.c` (Zero-$a_3$ Bi-Directional Bridge solver; full repo at [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding)) |
 
 ## Credit and licence
 
