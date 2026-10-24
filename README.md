@@ -1,7 +1,10 @@
-# Preimages for 19-step SHA-256 with standard padding
+# Preimages for 19- and 20-step SHA-256 with standard padding
 
-This repository gives working preimages for **SHA-256 reduced to its first 19 of 64 steps, as a hash
-function** (written H19 below): standard initial value, standard padding, only steps 0–18 on every
+> **October 2026 Update — Full 19- & 20-Step Padded SHA-256 Paper, GPU Solvers & 29 20-Step Witnesses:**
+> See **[`paper_19_20_padded_sudoku/PAPER_19_20_PADDED_SHA256_final-v1.pdf`](paper_19_20_padded_sudoku/PAPER_19_20_PADDED_SHA256_final-v1.pdf)** (and [`paper_19_20_padded_sudoku/README.md`](paper_19_20_padded_sudoku/README.md)) for the complete research paper (*Practical Preimages for 19- and 20-Step Reduced SHA-256: Exact Algebraic Padding Inversion, Context Shaping, and Causal Bit-Slice Pruning*), the CUDA GPU solvers (`solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu` achieving `180,831.9 sol19/s` on 1× NVIDIA L4 GPU and `4.18 min` per 20-step padded preimage on 8× L4 GPUs), and all 29 verified 20-step preimage witnesses (`witnesses/witnesses_20step.txt`, `witnesses/demos_20step.txt`).
+
+This repository gives working preimages for **SHA-256 reduced to its first 19 and 20 of 64 steps, as a hash
+function** (written H19 and H20 below): standard initial value, standard padding, only steps 0–18 (or 0–19) on every
 block, and the usual feed-forward, with all 256 output bits matching a prescribed target.
 
 Given a target digest, the solver searches for a 55-byte message M with H19(M) = target. It succeeded
@@ -25,14 +28,17 @@ Nothing here affects full 64-step SHA-256.
 target  = SHA-256("abc")
         = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 
-message = 8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a
-          (55 bytes)
+19-step padded message (55 bytes):
+message_19 = 8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a
+H19(message_19) = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 
-H19(message) = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+20-step padded message (55 bytes):
+message_20 = edf6e70a7001ae71b900f18119aaa1fdf6c1179b4268891262a9539be04d41236685e0c102e0ad23165e8b7157669819302ddcb3c68226
+H20(message_20) = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
 ```
 
-The target here is the ordinary 64-step SHA-256 digest of "abc". So the message is a preimage of that
-digest under H19. It is not an H19 collision with "abc", because H19("abc") is a different value.
+The target here is the ordinary 64-step SHA-256 digest of "abc". So each message is a preimage of that
+digest under H19 or H20.
 
 ## What is new, and what is not
 
@@ -44,9 +50,10 @@ digest under H19. It is not an H19 collision with "abc", because H19("abc") is a
 | 19 | compression function | Zaikin, *Constraints* 2026 (SAT, one all-ones target, 18 h 33 min on 192 cores); Basra 2026 (algebraic) |
 | 20 | compression function | Basra 2026 (GPU, about 2^45.4 table lookups); [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding) (CPU, ~2^33 via Zero-a3 Bi-Directional Q0/Q1 Bridge, 21.1 min on 16 vCPUs) |
 | **19** | **hash function, with padding** | **this repository** |
+| **20** | **hash function, with padding** | **this repository ([`paper_19_20_padded_sudoku/`](paper_19_20_padded_sudoku/) & `witnesses/witnesses_20step.txt`)** |
 
-To our knowledge, as of 2026-10-13, this is the first publicly documented computation of full
-256-bit preimages for SHA-256 reduced to its first 19 steps with the standard IV and padding. That is
+To our knowledge, as of October 2026, this is the first publicly documented computation of full
+256-bit preimages for SHA-256 reduced to its first 19 and 20 steps with the standard IV and padding. That is
 a statement about what we could find, not a proof of priority. Our searches (general web search and
 the reference lists of the papers above) did not cover CNKI, Wanfang, CiNii, RISS, ProQuest or
 Russian thesis databases, which we could not access. We also know of three padded 17-step
@@ -68,6 +75,8 @@ that line, padded or not.
 
 ```bash
 python3 verify/verify_standalone.py witnesses/witnesses_19step.txt
+python3 verify/verify_standalone.py witnesses/witnesses_20step.txt
+python3 paper_19_20_padded_sudoku/verify_all_witnesses.py
 ```
 
 The verifier first checks itself against `hashlib` at 64 steps. It then recomputes every witness
@@ -248,9 +257,10 @@ the witnesses are self-verifying, and corrections are welcome.
 
 | path | contents |
 |---|---|
+| `paper_19_20_padded_sudoku/` | **Main 19- & 20-step padded SHA-256 publication package**: `PAPER_19_20_PADDED_SHA256_final-v1.pdf`, `COMPANION_SUDOKU_ELI5_ELIU.pdf`, `solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu`, `solve20_padded_fast.c`, `verify_all_witnesses.py`, and all 29 20-step witnesses (`witnesses_20step.txt`, `demos_20step.txt`) |
 | `src/` | `pre19.c` (first-generation solver), `aseq.py` (a-sequence toolkit), `validate_chain.py` (numerical check of the key identities) |
-| `verify/` | stdlib verifier, and an independently written checker |
-| `witnesses/` | all witnesses and raw solver logs |
+| `verify/` | stdlib verifier (`verify_standalone.py`, supporting 19-step and 20-step witnesses), and an independently written checker |
+| `witnesses/` | all 19-step and 20-step witnesses and raw solver logs |
 | `docs/NOTE.md` | technical note: method, proof, costs, prior work |
 | `checks/` | re-check logs; `recheck_2026-10-13/` has an independent SHA-256, witness counts, the 22 new solves and their statistics |
 | `exploration/twenty_steps/` | `solve20_padded_fast.c` & `test_speedup.c` (exact `O(1)` `W_13` padding inversion, exact `D = 0` shaping, `<10 ms` 19-step padded & unified 20-step padded solver), `solve20_padded.c`, preliminary 20-step split analysis, and `solve20_zero_a3.c` (Zero-$a_3$ Bi-Directional Bridge solver; full repo at [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding)) |

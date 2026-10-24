@@ -60,7 +60,7 @@ static const u32 IV[8] = {
 #define PADLEN_BITS 440ULL
 #define R_STEPS 20
 #define OFF 7
-#define MAX_BATCH_CTX 16
+#define MAX_BATCH_CTX 32
 
 #define ROR(x,n) (((x)>>(n))|((x)<<(32-(n))))
 static inline u32 S0(u32 x){ return ROR(x,2)^ROR(x,13)^ROR(x,22); }
@@ -1294,6 +1294,7 @@ static compact_ctx_t g_ctx_pool[CTX_POOL_CAP];
 static u8            g_ctx_pool_used[CTX_POOL_CAP];
 static int           g_ctx_pool_len = 0;
 static int           g_ctx_target_gen = 1;
+static int           g_ctx_init_pool  = 4096;
 
 static void expand_compact_ctx(const compact_ctx_t *cc, right_ctx_t *rc){
     u32 A[R_STEPS + OFF + 2];
@@ -1555,7 +1556,7 @@ static u64 generate_right_contexts_parallel(int nthreads){
     if(B == 1){
         gen_target = (unused >= 1) ? 0 : 32;
     } else if(g_ctx_pool_len == 0){
-        gen_target = CTX_RESERVOIR_INIT;
+        gen_target = g_ctx_init_pool;
     } else if(unused < B){
         gen_target = CTX_REPLENISH_BATCH;
     } else {
@@ -2424,6 +2425,10 @@ static inline void drain_q3_fast_6gb_b1(const q3_hot4_t *q3_hot, const q3_cold4_
 #ifndef SLIDE4_MODE
 #define SLIDE4_MODE 1
 #endif
+#ifndef SWEEP_LIMIT
+#define SWEEP_LIMIT (1ULL << 32)
+#endif
+static u64 g_sweep_limit = SWEEP_LIMIT;
 
 static void *worker_thread_6gb_b1(void *arg){
     (void)arg;
@@ -2461,15 +2466,11 @@ static void *worker_thread_6gb_b1(void *arg){
     q3_cold4_t q3_cold[256];
     int n_q2 = 0, n_q3 = 0;
 
-#ifndef SWEEP_LIMIT
-#define SWEEP_LIMIT (1ULL << 32)
-#endif
-
     while(!atomic_load_explicit(&g_solved20, memory_order_relaxed)){
         u64 start = atomic_fetch_add_explicit(&g_next_a1_chunk, CHUNK_SIZE, memory_order_relaxed);
-        if(start >= SWEEP_LIMIT) break;
+        if(start >= g_sweep_limit) break;
         u64 end = start + CHUNK_SIZE;
-        if(end > SWEEP_LIMIT) end = SWEEP_LIMIT;
+        if(end > g_sweep_limit) end = g_sweep_limit;
 
         u64 local_l2 = 0, local_l3 = 0, local_sol19 = 0;
 
@@ -2691,8 +2692,12 @@ static void *worker_thread_6gb_b1(void *arg){
 #define L2_ASYM_MODE 0
 #endif
 #ifndef W_LO_MAX
-#define W_LO_MAX 8
+#define W_LO_MAX 7
 #endif
+
+static int g_l2_mode  = 2;
+static int g_w_lo_max = W_LO_MAX;
+static int g_pair_l1  = 1;
 
 static inline void compact_q2_6gb_ctx(const u32 * __restrict__ q2_t17, const u32 * __restrict__ q2_G2, const q2_cold4_t * __restrict__ q2_cold, int n_q2,
                                       q3_hot4_t * __restrict__ q3_hot, q3_cold4_t * __restrict__ q3_cold, int * __restrict__ p_n_q3,
@@ -2703,106 +2708,112 @@ static inline void compact_q2_6gb_ctx(const u32 * __restrict__ q2_t17, const u32
     const int w_thresh = st->w_thresh;
     const u32 a5  = st->rctx[ctx_id].a5;
     const u32 T18 = st->rctx[ctx_id].T18;
-#if L2_SUDOKU_MODE == 0
-    int n_w2 = 0;
-    for(int i=0; i<n_q2; i++){
-        u32 t17  = q2_t17[i];
-        const u16 *b = &H_pack6[slide3_off(t17)];
-        u32 ulo0 = b[0];
-        u32 ulo1 = b[1];
-        u32 ulo2 = b[2];
-        u32 idx0 = rec_idx(ulo0, t17);
-        u32 idx1 = rec_idx(ulo1, t17);
-        u32 idx2 = rec_idx(ulo2, t17);
-        u32 u0   = ulo0 | ((u32)REC_HI16[idx0] << 16);
-        u32 u1   = ulo1 | ((u32)REC_HI16[idx1] << 16);
-        u32 u2   = ulo2 | ((u32)REC_HI16[idx2] << 16);
-        u32 h0   = (Qf(u0) == t17) & (ulo0 != 0u);
-        w2_cand[n_w2] = u0; w2_idx[n_w2] = (u8)i; n_w2 += h0;
-        u32 h1   = (Qf(u1) == t17) & (ulo1 != 0u);
-        w2_cand[n_w2] = u1; w2_idx[n_w2] = (u8)i; n_w2 += h1;
-        u32 h2   = (Qf(u2) == t17) & (ulo2 != 0u);
-        w2_cand[n_w2] = u2; w2_idx[n_w2] = (u8)i; n_w2 += h2;
-#if SLIDE4_MODE == 1
-        if(__builtin_expect(h0 & h1 & h2, 0)){
-            u32 ulo3 = b[(t17 & 15u) >= 13u ? -1 : 3];
-            u32 u3   = ulo3 | ((u32)REC_HI16[rec_idx(ulo3, t17)] << 16);
-            w2_cand[n_w2] = u3; w2_idx[n_w2] = (u8)i;
-            n_w2 += (Qf(u3) == t17) & (ulo3 != 0u);
-        }
-#endif
-    }
     int n_l2 = 0;
-    for(int j=0; j<n_w2; j++){
-        u32 i  = w2_idx[j];
-        u32 W2 = w2_cand[j];
-        u32 m3 = ~((W2 + q2_G2[i]) ^ a5);
-        l2_W2[n_l2]  = W2;
-        l2_M3[n_l2]  = m3;
-        l2_idx[n_l2] = (u8)i;
-#if L2_ASYM_MODE == 1
-        int w_tot = __builtin_popcount(m3);
-        int w_lo  = __builtin_popcount(m3 & 0x7fffu);
-        n_l2 += (w_tot <= w_thresh) | ((w_tot == w_thresh + 1) & (w_lo >= 7));
-#elif L2_ASYM_MODE == 2
-        int w_tot = __builtin_popcount(m3);
-        int w_lo  = __builtin_popcount(m3 & 0x7fffu);
-        n_l2 += (w_tot <= w_thresh) & (w_lo >= 4);
-#else
-        n_l2 += (__builtin_popcount(m3) <= w_thresh);
-#endif
-    }
-#elif L2_SUDOKU_MODE == 1
-    (void)w2_cand; (void)w2_idx;
-    const u32 inv_a5 = ~a5;
-    int n_l2 = 0;
-    for(int i=0; i<n_q2; i++){
-        u32 t17 = q2_t17[i];
-        u32 G2  = q2_G2[i];
-        const u16 *b = &H_pack6[slide3_off(t17)];
-        u32 ulo0 = b[0], ulo1 = b[1], ulo2 = b[2];
-        u32 u0 = ulo0 | ((u32)REC_HI16[rec_idx(ulo0, t17)] << 16);
-        u32 u1 = ulo1 | ((u32)REC_HI16[rec_idx(ulo1, t17)] << 16);
-        u32 u2 = ulo2 | ((u32)REC_HI16[rec_idx(ulo2, t17)] << 16);
-        u32 m3_0 = (u0 + G2) ^ inv_a5;
-        if(__builtin_expect(__builtin_popcount(m3_0) <= w_thresh, 0)){
-            u32 ok0 = (ulo0 != 0u) & (Qf(u0) == t17);
-            l2_W2[n_l2] = u0; l2_M3[n_l2] = m3_0; l2_idx[n_l2] = (u8)i; n_l2 += ok0;
-        }
-        u32 m3_1 = (u1 + G2) ^ inv_a5;
-        if(__builtin_expect(__builtin_popcount(m3_1) <= w_thresh, 0)){
-            u32 ok1 = (ulo1 != 0u) & (Qf(u1) == t17);
-            l2_W2[n_l2] = u1; l2_M3[n_l2] = m3_1; l2_idx[n_l2] = (u8)i; n_l2 += ok1;
-        }
-        u32 m3_2 = (u2 + G2) ^ inv_a5;
-        if(__builtin_expect(__builtin_popcount(m3_2) <= w_thresh, 0)){
-            u32 ok2 = (ulo2 != 0u) & (Qf(u2) == t17);
-            l2_W2[n_l2] = u2; l2_M3[n_l2] = m3_2; l2_idx[n_l2] = (u8)i; n_l2 += ok2;
-        }
-    }
-#elif L2_SUDOKU_MODE == 2
-    (void)w2_cand; (void)w2_idx;
-    const u32 inv_a5 = ~a5;
-    const u32 inv_a5_lo = inv_a5 & 0xffffu;
-    int n_l2 = 0;
-    for(int i=0; i<n_q2; i++){
-        u32 t17 = q2_t17[i];
-        u32 G2  = q2_G2[i];
-        const u16 *b = &H_pack6[slide3_off(t17)];
-        for(int s=0; s<3; s++){
-            u32 ulo = b[s];
-            u32 m_lo = ((ulo + G2) ^ inv_a5_lo) & 0xffffu;
-            if(__builtin_popcount(m_lo) <= W_LO_MAX){
-                u32 u = ulo | ((u32)REC_HI16[rec_idx(ulo, t17)] << 16);
-                u32 m3 = (u + G2) ^ inv_a5;
-                if(__builtin_expect(__builtin_popcount(m3) <= w_thresh, 0)){
-                    u32 ok = (ulo != 0u) & (Qf(u) == t17);
-                    l2_W2[n_l2] = u; l2_M3[n_l2] = m3; l2_idx[n_l2] = (u8)i; n_l2 += ok;
+
+    if(g_l2_mode == 2){
+        (void)w2_cand; (void)w2_idx;
+        const u32 inv_a5 = ~a5;
+        const u32 inv_a5_lo = inv_a5 & 0xffffu;
+        const int w_lo_max = g_w_lo_max;
+        for(int i=0; i<n_q2; i++){
+            u32 t17 = q2_t17[i];
+            u32 G2  = q2_G2[i];
+            const u16 *b = &H_pack6[slide3_off(t17)];
+            u32 ulo0 = b[0], ulo1 = b[1], ulo2 = b[2];
+            u32 m_lo0 = ((ulo0 + G2) ^ inv_a5_lo) & 0xffffu;
+            if(__builtin_popcount(m_lo0) <= w_lo_max){
+                u32 u0 = ulo0 | ((u32)REC_HI16[rec_idx(ulo0, t17)] << 16);
+                u32 m3_0 = (u0 + G2) ^ inv_a5;
+                if(__builtin_expect(__builtin_popcount(m3_0) <= w_thresh, 0)){
+                    u32 ok0 = (ulo0 != 0u) & (Qf(u0) == t17);
+                    l2_W2[n_l2] = u0; l2_M3[n_l2] = m3_0; l2_idx[n_l2] = (u8)i; n_l2 += ok0;
+                }
+            }
+            u32 m_lo1 = ((ulo1 + G2) ^ inv_a5_lo) & 0xffffu;
+            if(__builtin_popcount(m_lo1) <= w_lo_max){
+                u32 u1 = ulo1 | ((u32)REC_HI16[rec_idx(ulo1, t17)] << 16);
+                u32 m3_1 = (u1 + G2) ^ inv_a5;
+                if(__builtin_expect(__builtin_popcount(m3_1) <= w_thresh, 0)){
+                    u32 ok1 = (ulo1 != 0u) & (Qf(u1) == t17);
+                    l2_W2[n_l2] = u1; l2_M3[n_l2] = m3_1; l2_idx[n_l2] = (u8)i; n_l2 += ok1;
+                }
+            }
+            u32 m_lo2 = ((ulo2 + G2) ^ inv_a5_lo) & 0xffffu;
+            if(__builtin_popcount(m_lo2) <= w_lo_max){
+                u32 u2 = ulo2 | ((u32)REC_HI16[rec_idx(ulo2, t17)] << 16);
+                u32 m3_2 = (u2 + G2) ^ inv_a5;
+                if(__builtin_expect(__builtin_popcount(m3_2) <= w_thresh, 0)){
+                    u32 ok2 = (ulo2 != 0u) & (Qf(u2) == t17);
+                    l2_W2[n_l2] = u2; l2_M3[n_l2] = m3_2; l2_idx[n_l2] = (u8)i; n_l2 += ok2;
                 }
             }
         }
-    }
+    } else if(g_l2_mode == 1){
+        (void)w2_cand; (void)w2_idx;
+        const u32 inv_a5 = ~a5;
+        for(int i=0; i<n_q2; i++){
+            u32 t17 = q2_t17[i];
+            u32 G2  = q2_G2[i];
+            const u16 *b = &H_pack6[slide3_off(t17)];
+            u32 ulo0 = b[0], ulo1 = b[1], ulo2 = b[2];
+            u32 u0 = ulo0 | ((u32)REC_HI16[rec_idx(ulo0, t17)] << 16);
+            u32 u1 = ulo1 | ((u32)REC_HI16[rec_idx(ulo1, t17)] << 16);
+            u32 u2 = ulo2 | ((u32)REC_HI16[rec_idx(ulo2, t17)] << 16);
+            u32 m3_0 = (u0 + G2) ^ inv_a5;
+            if(__builtin_expect(__builtin_popcount(m3_0) <= w_thresh, 0)){
+                u32 ok0 = (ulo0 != 0u) & (Qf(u0) == t17);
+                l2_W2[n_l2] = u0; l2_M3[n_l2] = m3_0; l2_idx[n_l2] = (u8)i; n_l2 += ok0;
+            }
+            u32 m3_1 = (u1 + G2) ^ inv_a5;
+            if(__builtin_expect(__builtin_popcount(m3_1) <= w_thresh, 0)){
+                u32 ok1 = (ulo1 != 0u) & (Qf(u1) == t17);
+                l2_W2[n_l2] = u1; l2_M3[n_l2] = m3_1; l2_idx[n_l2] = (u8)i; n_l2 += ok1;
+            }
+            u32 m3_2 = (u2 + G2) ^ inv_a5;
+            if(__builtin_expect(__builtin_popcount(m3_2) <= w_thresh, 0)){
+                u32 ok2 = (ulo2 != 0u) & (Qf(u2) == t17);
+                l2_W2[n_l2] = u2; l2_M3[n_l2] = m3_2; l2_idx[n_l2] = (u8)i; n_l2 += ok2;
+            }
+        }
+    } else {
+        int n_w2 = 0;
+        for(int i=0; i<n_q2; i++){
+            u32 t17  = q2_t17[i];
+            const u16 *b = &H_pack6[slide3_off(t17)];
+            u32 ulo0 = b[0];
+            u32 ulo1 = b[1];
+            u32 ulo2 = b[2];
+            u32 idx0 = rec_idx(ulo0, t17);
+            u32 idx1 = rec_idx(ulo1, t17);
+            u32 idx2 = rec_idx(ulo2, t17);
+            u32 u0   = ulo0 | ((u32)REC_HI16[idx0] << 16);
+            u32 u1   = ulo1 | ((u32)REC_HI16[idx1] << 16);
+            u32 u2   = ulo2 | ((u32)REC_HI16[idx2] << 16);
+            u32 h0   = (Qf(u0) == t17) & (ulo0 != 0u);
+            w2_cand[n_w2] = u0; w2_idx[n_w2] = (u8)i; n_w2 += h0;
+            u32 h1   = (Qf(u1) == t17) & (ulo1 != 0u);
+            w2_cand[n_w2] = u1; w2_idx[n_w2] = (u8)i; n_w2 += h1;
+            u32 h2   = (Qf(u2) == t17) & (ulo2 != 0u);
+            w2_cand[n_w2] = u2; w2_idx[n_w2] = (u8)i; n_w2 += h2;
+#if SLIDE4_MODE == 1
+            if(__builtin_expect(h0 & h1 & h2, 0)){
+                u32 ulo3 = b[(t17 & 15u) >= 13u ? -1 : 3];
+                u32 u3   = ulo3 | ((u32)REC_HI16[rec_idx(ulo3, t17)] << 16);
+                w2_cand[n_w2] = u3; w2_idx[n_w2] = (u8)i;
+                n_w2 += (Qf(u3) == t17) & (ulo3 != 0u);
+            }
 #endif
+        }
+        for(int j=0; j<n_w2; j++){
+            u32 i  = w2_idx[j];
+            u32 W2 = w2_cand[j];
+            u32 m3 = ~((W2 + q2_G2[i]) ^ a5);
+            l2_W2[n_l2]  = W2;
+            l2_M3[n_l2]  = m3;
+            l2_idx[n_l2] = (u8)i;
+            n_l2 += (__builtin_popcount(m3) <= w_thresh);
+        }
+    }
     *local_l2 += (u64)n_l2;
     *local_l3 += (u64)n_l2;
     int n_q3 = *p_n_q3;
@@ -2950,9 +2961,9 @@ static void *worker_thread_6gb_b2(void *arg){
 
     while(!atomic_load_explicit(&g_solved20, memory_order_relaxed)){
         u64 start = atomic_fetch_add_explicit(&g_next_a1_chunk, CHUNK_SIZE, memory_order_relaxed);
-        if(start >= SWEEP_LIMIT) break;
+        if(start >= g_sweep_limit) break;
         u64 end = start + CHUNK_SIZE;
-        if(end > SWEEP_LIMIT) end = SWEEP_LIMIT;
+        if(end > g_sweep_limit) end = g_sweep_limit;
 
         u64 local_l2 = 0, local_l3 = 0, local_sol19 = 0;
 
@@ -3142,7 +3153,7 @@ static void *worker_thread_6gb_b2(void *arg){
     return NULL;
 }
 
-// Pipelined Multi-Pair Worker for B == 4, 6, 8:
+// Pipelined Multi-Pair Worker for B >= 3 (up to MAX_BATCH_CTX = 32):
 #define PF_BATCH_BP 32
 static void *worker_thread_6gb_bpairs(void *arg){
     (void)arg;
@@ -3156,20 +3167,23 @@ static void *worker_thread_6gb_bpairs(void *arg){
     const u32 C_sm1    = a0 & am1;
     const u32 M_e0_em1 = e0 ^ em1;
 
-    u32 C_T16_c[8], T17_c[8];
+    u32 C_T16_c[MAX_BATCH_CTX], T17_c[MAX_BATCH_CTX], dT16_pair[MAX_BATCH_CTX / 2];
     for(int c=0; c<B; c++){
         C_T16_c[c] = st->rctx[c].T16 - C_W0;
         T17_c[c]   = st->rctx[c].T17;
     }
+    for(int p=0; p<B/2; p++){
+        dT16_pair[p] = st->rctx[2*p+1].T16 - st->rctx[2*p].T16;
+    }
 
     u32 b_sm1[2][PF_BATCH_BP], b_G1[2][PF_BATCH_BP], b_f1[PF_BATCH_BP];
-    u32 b_t16_c[2][8][PF_BATCH_BP];
-    u32 l1_W1[160];
-    u8  l1_idx[160];
+    u32 b_t16_c[2][MAX_BATCH_CTX][PF_BATCH_BP];
+    u32 l1_W1[160], l1_W1_b[160];
+    u8  l1_idx[160], l1_idx_b[160];
 
-    u32        q2_t17[8][384];
-    u32        q2_G2[8][384];
-    q2_cold4_t q2_cold[8][384];
+    u32        q2_t17[MAX_BATCH_CTX][384];
+    u32        q2_G2[MAX_BATCH_CTX][384];
+    q2_cold4_t q2_cold[MAX_BATCH_CTX][384];
 
     u32 w2_cand[512];
     u8  w2_idx[512];
@@ -3177,15 +3191,15 @@ static void *worker_thread_6gb_bpairs(void *arg){
     u32 l2_M3[512];
     u8  l2_idx[512];
 
-    q3_hot4_t  q3_hot[8][256];
-    q3_cold4_t q3_cold[8][256];
-    int n_q2[8] = {0}, n_q3[8] = {0};
+    q3_hot4_t  q3_hot[MAX_BATCH_CTX][256];
+    q3_cold4_t q3_cold[MAX_BATCH_CTX][256];
+    int n_q2[MAX_BATCH_CTX] = {0}, n_q3[MAX_BATCH_CTX] = {0};
 
     while(!atomic_load_explicit(&g_solved20, memory_order_relaxed)){
         u64 start = atomic_fetch_add_explicit(&g_next_a1_chunk, CHUNK_SIZE, memory_order_relaxed);
-        if(start >= SWEEP_LIMIT) break;
+        if(start >= g_sweep_limit) break;
         u64 end = start + CHUNK_SIZE;
-        if(end > SWEEP_LIMIT) end = SWEEP_LIMIT;
+        if(end > g_sweep_limit) end = g_sweep_limit;
 
         u64 local_l2 = 0, local_l3 = 0, local_sol19 = 0;
 
@@ -3201,7 +3215,9 @@ static void *worker_thread_6gb_bpairs(void *arg){
         for(int c=0; c<B; c++){
             u32 ct16 = C_T16_c[c];
             for(int i=0; i<PF_BATCH_BP; i++) b_t16_c[0][c][i] = ct16 + b_f1[i];
-            for(int i=0; i<PF_BATCH_BP; i++) __builtin_prefetch(&H_pack6[pf12_off(b_t16_c[0][c][i])], 0, 0);
+            if(!g_pair_l1 || (c & 1) == 0){
+                for(int i=0; i<PF_BATCH_BP; i++) __builtin_prefetch(&H_pack6[pf12_off(b_t16_c[0][c][i])], 0, 0);
+            }
         }
         int cur = 0;
 
@@ -3223,7 +3239,9 @@ static void *worker_thread_6gb_bpairs(void *arg){
                 for(int c=0; c<B; c++){
                     u32 ct16 = C_T16_c[c];
                     for(int i=0; i<PF_BATCH_BP; i++) b_t16_c[nxt][c][i] = ct16 + b_f1[i];
-                    for(int i=0; i<PF_BATCH_BP; i++) __builtin_prefetch(&H_pack6[pf12_off(b_t16_c[nxt][c][i])], 0, 0);
+                    if(!g_pair_l1 || (c & 1) == 0){
+                        for(int i=0; i<PF_BATCH_BP; i++) __builtin_prefetch(&H_pack6[pf12_off(b_t16_c[nxt][c][i])], 0, 0);
+                    }
                 }
             }
 
@@ -3244,52 +3262,67 @@ static void *worker_thread_6gb_bpairs(void *arg){
                 }
             }
 
-            // Step 3: Per-context branchless L1 compaction + immediate t17 prefetches
-            for(int c=0; c<B; c++){
-                int nl = 0;
-                for(int i=0; i<PF_BATCH_BP; i++){
-                    u32 y = b_t16_c[cur][c][i];
-                    const u16 *b = &H_pack6[slide3_off(y)];
-                    u32 ulo0 = b[0], ulo1 = b[1], ulo2 = b[2];
-                    u32 u0 = ulo0 | ((u32)REC_HI16[rec_idx(ulo0, y)] << 16);
-                    u32 u1 = ulo1 | ((u32)REC_HI16[rec_idx(ulo1, y)] << 16);
-                    u32 u2 = ulo2 | ((u32)REC_HI16[rec_idx(ulo2, y)] << 16);
-                    u32 h0 = (Qf(u0) == y) & (ulo0 != 0u);
-                    l1_W1[nl] = u0; l1_idx[nl] = (u8)i; nl += h0;
-                    u32 h1 = (Qf(u1) == y) & (ulo1 != 0u);
-                    l1_W1[nl] = u1; l1_idx[nl] = (u8)i; nl += h1;
-                    u32 h2 = (Qf(u2) == y) & (ulo2 != 0u);
-                    l1_W1[nl] = u2; l1_idx[nl] = (u8)i; nl += h2;
+            // Step 3: Branchless L1 compaction + immediate t17 prefetches
+            if(g_pair_l1 && (B & 1) == 0){
+                for(int p=0; p<B/2; p++){
+                    int c0 = 2*p, c1 = 2*p + 1;
+                    int nl0 = 0, nl1 = 0;
+                    l1_compact_pair_6gb(b_t16_c[cur][c0], dT16_pair[p],
+                                        l1_W1, l1_idx, &nl0, l1_W1_b, l1_idx_b, &nl1);
+                    l1_push_q2_6gb(base, b_sm1[cur], b_G1[cur],
+                                   l1_W1, l1_idx, nl0, T17_c[c0], st,
+                                   q2_t17[c0], q2_G2[c0], q2_cold[c0], &n_q2[c0]);
+                    l1_push_q2_6gb(base, b_sm1[cur], b_G1[cur],
+                                   l1_W1_b, l1_idx_b, nl1, T17_c[c1], st,
+                                   q2_t17[c1], q2_G2[c1], q2_cold[c1], &n_q2[c1]);
+                }
+            } else {
+                for(int c=0; c<B; c++){
+                    int nl = 0;
+                    for(int i=0; i<PF_BATCH_BP; i++){
+                        u32 y = b_t16_c[cur][c][i];
+                        const u16 *b = &H_pack6[slide3_off(y)];
+                        u32 ulo0 = b[0], ulo1 = b[1], ulo2 = b[2];
+                        u32 u0 = ulo0 | ((u32)REC_HI16[rec_idx(ulo0, y)] << 16);
+                        u32 u1 = ulo1 | ((u32)REC_HI16[rec_idx(ulo1, y)] << 16);
+                        u32 u2 = ulo2 | ((u32)REC_HI16[rec_idx(ulo2, y)] << 16);
+                        u32 h0 = (Qf(u0) == y) & (ulo0 != 0u);
+                        l1_W1[nl] = u0; l1_idx[nl] = (u8)i; nl += h0;
+                        u32 h1 = (Qf(u1) == y) & (ulo1 != 0u);
+                        l1_W1[nl] = u1; l1_idx[nl] = (u8)i; nl += h1;
+                        u32 h2 = (Qf(u2) == y) & (ulo2 != 0u);
+                        l1_W1[nl] = u2; l1_idx[nl] = (u8)i; nl += h2;
 #if SLIDE4_MODE == 1
-                    if(__builtin_expect(h0 & h1 & h2, 0)){
-                        u32 ulo3 = b[(y & 15u) >= 13u ? -1 : 3];
-                        u32 u3   = ulo3 | ((u32)REC_HI16[rec_idx(ulo3, y)] << 16);
-                        l1_W1[nl] = u3; l1_idx[nl] = (u8)i;
-                        nl += (Qf(u3) == y) & (ulo3 != 0u);
-                    }
+                        if(__builtin_expect(h0 & h1 & h2, 0)){
+                            u32 ulo3 = b[(y & 15u) >= 13u ? -1 : 3];
+                            u32 u3   = ulo3 | ((u32)REC_HI16[rec_idx(ulo3, y)] << 16);
+                            l1_W1[nl] = u3; l1_idx[nl] = (u8)i;
+                            nl += (Qf(u3) == y) & (ulo3 != 0u);
+                        }
 #endif
+                    }
+                    const u32 T17 = T17_c[c];
+                    int nq = n_q2[c];
+                    for(int j=0; j<nl; j++){
+                        u32 i   = l1_idx[j];
+                        u32 W1  = l1_W1[j];
+                        u32 a1  = (u32)base + i;
+                        u32 e1  = a1 + C_e1;
+                        u32 sm1 = b_sm1[cur][i];
+                        u32 G1  = b_G1[cur][i];
+                        u32 a2  = W1 + G1;
+                        u32 e2  = a2 - sm1 + am2;
+                        u32 sm2 = S0(a2) + MAJ(a2, a1, a0);
+                        u32 G2  = sm2 + S1(e2) + CH(e2, e1, e0) + C_G2;
+                        u32 t17 = T17 + G2 - W1;
+                        __builtin_prefetch(&H_pack6[pf12_off(t17)], 0, 0);
+                        q2_t17[c][nq]  = t17;
+                        q2_G2[c][nq]   = G2;
+                        q2_cold[c][nq] = (q2_cold4_t){a1, a2, e2, sm2};
+                        nq++;
+                    }
+                    n_q2[c] = nq;
                 }
-                const u32 T17 = T17_c[c];
-                int nq = n_q2[c];
-                for(int j=0; j<nl; j++){
-                    u32 i   = l1_idx[j];
-                    u32 W1  = l1_W1[j];
-                    u32 a1  = (u32)base + i;
-                    u32 e1  = a1 + C_e1;
-                    u32 sm1 = b_sm1[cur][i];
-                    u32 G1  = b_G1[cur][i];
-                    u32 a2  = W1 + G1;
-                    u32 e2  = a2 - sm1 + am2;
-                    u32 sm2 = S0(a2) + MAJ(a2, a1, a0);
-                    u32 G2  = sm2 + S1(e2) + CH(e2, e1, e0) + C_G2;
-                    u32 t17 = T17 + G2 - W1;
-                    __builtin_prefetch(&H_pack6[pf12_off(t17)], 0, 0);
-                    q2_t17[c][nq]  = t17;
-                    q2_G2[c][nq]   = G2;
-                    q2_cold[c][nq] = (q2_cold4_t){a1, a2, e2, sm2};
-                    nq++;
-                }
-                n_q2[c] = nq;
             }
 
             cur = nxt;
@@ -3539,10 +3572,10 @@ static void *worker_thread(void *arg){
     if(g_table_gb == 6 && G_STATE.batch_ctx == 1){
         return worker_thread_6gb_b1(arg);
     }
-    if(g_table_gb == 6 && G_STATE.batch_ctx == 2){
+    if(g_table_gb == 6 && G_STATE.batch_ctx == 2 && !g_pair_l1){
         return worker_thread_6gb_b2(arg);
     }
-    if(g_table_gb == 6 && (G_STATE.batch_ctx == 4 || G_STATE.batch_ctx == 6 || G_STATE.batch_ctx == 8)){
+    if(g_table_gb == 6 && G_STATE.batch_ctx >= 2){
         return worker_thread_6gb_bpairs(arg);
     }
     if(g_table_gb == 4 && G_STATE.batch_ctx == 1){
@@ -4041,7 +4074,7 @@ int main(int argc, char **argv){
     int nthreads   = (int)sysconf(_SC_NPROCESSORS_ONLN);
     if(nthreads < 1) nthreads = 8;
     int table_gb   = 6;
-    int batch_ctx  = 2;
+    int batch_ctx  = 8;
     int max_sweeps = 0; // 0 = unlimited
 
     if(argc > 1 && argv[1][0] != '-'){
@@ -4060,6 +4093,11 @@ int main(int argc, char **argv){
             else if(!strcmp(argv[i], "--batch-ctx") && i+1<argc) batch_ctx = atoi(argv[++i]);
             else if(!strcmp(argv[i], "--max-sweeps") && i+1<argc) max_sweeps = atoi(argv[++i]);
             else if(!strcmp(argv[i], "--f1-stream")) g_f1_stream = 1;
+            else if(!strcmp(argv[i], "--l2-mode") && i+1<argc) g_l2_mode = atoi(argv[++i]);
+            else if(!strcmp(argv[i], "--w-lo-max") && i+1<argc) g_w_lo_max = atoi(argv[++i]);
+            else if(!strcmp(argv[i], "--sweep-shift") && i+1<argc) g_sweep_limit = 1ULL << atoi(argv[++i]);
+            else if(!strcmp(argv[i], "--ctx-pool") && i+1<argc) g_ctx_init_pool = atoi(argv[++i]);
+            else if(!strcmp(argv[i], "--pair-l1") && i+1<argc) g_pair_l1 = atoi(argv[++i]);
         }
     }
 
@@ -4143,9 +4181,11 @@ int main(int argc, char **argv){
         total_sol19 += sol19;
         double elapsed_all = now_sec() - t_start_all;
 
-        fprintf(stderr, " -> Sweep #%llu (%d ctxs) in %.2fs: sol19=%llu (%.1f/ctx) | L2=%llu L3=%llu | rate=%.1f sol19/s | avg rate=%.1f sol19/s (total sol19=%llu, %.1fs)\n",
-                (unsigned long long)total_sweeps, batch_ctx, t_sw,
+        double scale = (double)(1ULL << 32) / (double)g_sweep_limit;
+        fprintf(stderr, " -> Sweep #%llu (%d ctxs, l2m=%d, w=%d/%d, pair=%d) in %.2fs: sol19=%llu (%.1f/ctx, full_eq=%.0f/ctx) | L2=%llu L3=%llu | rate=%.1f sol19/s | avg rate=%.1f sol19/s (total sol19=%llu, %.1fs)\n",
+                (unsigned long long)total_sweeps, batch_ctx, g_l2_mode, w_thresh, g_w_lo_max, g_pair_l1, t_sw,
                 (unsigned long long)sol19, (double)sol19 / (double)batch_ctx,
+                ((double)sol19 / (double)batch_ctx) * scale,
                 (unsigned long long)l2, (unsigned long long)l3,
                 (double)sol19 / t_sw,
                 (double)total_sol19 / elapsed_all,

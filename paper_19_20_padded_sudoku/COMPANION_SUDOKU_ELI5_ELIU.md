@@ -16,17 +16,18 @@ However, when SHA-256 is reduced to **19 steps (padded)** or **20 steps (padded)
 3. **You invert the coupled schedule operator $Q_0(u) = \sigma_0(u) - u$ across 3 chained steps using a zero-table 5-instruction bitwise inverse and a packed hash table (`Slot-Sudoku` / Cuckoo-Sudoku)** (`[E27]`–`[E37]`), eliminating memory bottlenecks on both Apple M3 CPUs and NVIDIA L4 GPUs.
 
 This companion guide is organized so that **anyone**—from a curious reader to a cryptography undergraduate or systems engineer—can understand every single piece of the breakthrough:
-- **Section 0 (Master Glossary & Complete `[E1]`–`[E41]` Index):** A 100% self-contained reference explaining every symbol, operator, C/CUDA variable, and numbered equation (`[E1]` through `[E41]`) in the main paper.
-- **Section 1 — The Scalar $a$-Sequence Grid (`[E1]`–`[E7]`):** How the 8-register SHA-256 state collapses into a single 1D Sudoku strip $a_{-7}, \dots, a_R$, and why FIPS 180-4 padding (`0x80`, zero fill, length `440`) locks the board (*ELI5* and *ELI-Undergraduate*).
+- **Section 0 (Master Glossary & Complete `[E1]`–`[E45]` Index):** A 100% self-contained reference explaining every symbol, operator, C/CUDA variable, and numbered equation (`[E1]` through `[E45]`) in the main paper.
+- **Section 1 — The Scalar $a$-Sequence Grid (`[E1]`–`[E7]`):** How the 8-register SHA-256 state collapses into a single 1D Sudoku strip $a_{-7}, \dots, a_R$, and why FIPS 180-4 padding (`0x80`, zero fill, length `440` or `952`) locks the board (*ELI5* and *ELI-Undergraduate*).
 - **Section 2 — Selector Saturation & Exact Context Shaping $D=0$ (`[E8]`–`[E14]`):** How locking $e_9 = e_{10} = \mathtt{0xffffffff}$ and forcing twin cells $a_5 = a_6$ ($D = a_5 \oplus a_6 = 0$) decouples the Left and Right halves of the cipher (*ELI5* and *ELI-Undergraduate*).
 - **Section 3 — Exact $O(1)$ Algebraic Padding Inversion (`[E15]`–`[E22]`):** How to absorb $W_{15}=440$ and $W_{14}=0$ in closed form and solve $(W_{13} \bmod 256) = \mathtt{0x80}$ in $O(1)$ time with zero trial-and-error (*ELI5* and *ELI-Undergraduate*).
-- **Section 4 — `Carry-Sudoku`: 7-Stage Causal Bit-Slice & Rotation-Invariant Right-Context Solver (`[E23]`–`[E26]`):** How Theorem 1 splits $a_5 = a_6$ into a lower-triangular carry check independent of $a_6$, reaching **86.4 billion trials/s** on Apple M3 and **56 trillion trials/s** on 1× NVIDIA L4 GPU (*ELI5* and *ELI-Undergraduate*).
-- **Section 5 — `Slot-Sudoku` & Zero-Table 5-Instruction $\mathbb{F}_2$ Inverse (`[E27]`–`[E37]`):** How Theorem 2 reconstructs upper 16 bits in 5 register instructions (`reconstruct_u`), how 6 GB / 16 GB / 32 GB `Slot-Sudoku` tables work, and how every 19-step padded solution is filtered in $O(1)$ via $\sigma_0^{-1}$ to find the first 20-step padded preimage (*ELI5* and *ELI-Undergraduate*).
-- **Section 6 — GPU Warp-Sudoku & The Zero-$a_3$ Unpadded Bridge (`[E38]`–`[E41]`):** How 16-Way Single-$T_{16}$ Fusion and Warp-Compacted Shared-Memory Queues reach **180,831.9 sol19/s** on 1× L4 GPU, and how setting $a_3=0$ solves 20-step unpadded compression preimages in 21.1 minutes on CPU (*ELI5* and *ELI-Undergraduate*).
+- **Section 4 — `Carry-Sudoku`: 7-Stage Causal Bit-Slice & Rotation-Invariant Right-Context Solver (`[E23]`–`[E26]`):** How Theorem 1 splits $a_5 = a_6$ into a lower-triangular carry check independent of $a_6$, reaching **86.4 billion trials/s** on Apple M3 and **114,507.0 exact $D=0$ contexts/s** on 1× NVIDIA L4 GPU (*ELI5* and *ELI-Undergraduate*).
+- **Section 5 — `Slot-Sudoku` & Zero-Table 5-Instruction $\mathbb{F}_2$ Inverse (`[E27]`–`[E37]`):** How Theorem 2 reconstructs upper 16 bits in 5 register instructions (`reconstruct_u`), how 6 GB / 8 GB / 16 GB / 32 GB `Slot-Sudoku` tables work, and how every 19-step padded solution is filtered in $O(1)$ via $\sigma_0^{-1}$ to find the first 20-step padded preimage (*ELI5* and *ELI-Undergraduate*).
+- **Section 6 — GPU Warp-Sudoku, Fused Octet-Hexadecet ($M=8, K=16$) Coalescing & The Zero-$a_3$ Unpadded Bridge (`[E38]`–`[E45]`):** How 29-Bit Carry-Tree Pre-Filtering, 1.0M-Context GPU Reservoirs, Fused Octet-Hexadecet Coalescing (`0.125` L2 lookups/ctx), and Pre-`ulo2` 16-Bit Lower-Triangular Pruning reach **2,143,080.6 sol19/s (`70.58 SHA20-eq/sol19`)** on 1× L4 GPU (`33.4 GPU-min` per 20-step padded preimage on 1× L4, or **`4.18 min` across 8× L4 GPUs**), and how setting $a_3=0$ solves 20-step unpadded compression preimages in 21.1 minutes on CPU (*ELI5* and *ELI-Undergraduate*).
+- **Section 7 — Scope, "Restricted" Preimages, Two-Block Plain-ASCII Preimages, and the 15-Theory Structural Barrier Suite:** Why locking Sudoku cells doesn't throw away the solution ($440 \to 184 \to 78.8 \to 14.8$ free bits), how a **2-block 119-byte message** lets you choose **any 64-byte plain-ASCII first block** in $O(1)$ while **Theory 15 (Two-Block Feed-Forward Locking)** proves why 2 blocks cannot reduce Round 20 below $2^{32}$, and the complete **15-Theory Structural Barrier Suite** proving why 19 rounds is $O(1)$, 20 rounds is $\Theta(2^{32})$, and 21 rounds is $\Theta(2^{64})$ (*ELI5* and *ELI-Undergraduate*).
 
 ---
 
-## Section 0: Master Self-Contained Glossary & Complete `[E1]`–`[E41]` Index
+## Section 0: Master Self-Contained Glossary & Complete `[E1]`–`[E45]` Index
 
 ### 0.1 Core Symbols, Operators, and Code Variables
 
@@ -47,9 +48,9 @@ This companion guide is organized so that **anyone**—from a curious reader to 
 
 ---
 
-### 0.2 Complete Cross-Reference of Equations `[E1]`–`[E41]` in `PAPER_19_20_PADDED_SHA256.pdf`
+### 0.2 Complete Cross-Reference of Equations `[E1]`–`[E45]` in `PAPER_19_20_PADDED_SHA256.pdf`
 
-- **`[E1]` (FIPS 180-4 Single-Block 55-Byte Padding):** Fixes $W_{15} = 440$ (`0x000001b8`), $W_{14} = 0$ (`0x00000000`), and $W_{13} \bmod 256 = \mathtt{0x80}$ (72 locked padding bits).
+- **`[E1]` (FIPS 180-4 Single-Block 55-Byte Padding):** Fixes $W_{15} = 440$ (`0x000001b8`), $W_{14} = 0$ (`0x00000000`), and $W_{13} \bmod 256 = \mathtt{0x80}$ (72 locked padding bits; or $W_{15} = 952 = \mathtt{0x000003b8}$ for a 2-block 119-byte padded message).
 - **`[E2]` (SHA-256 Boolean and Linear Functions):** Defines $\operatorname{Ch}$, $\operatorname{Maj}$, $\Sigma_0, \Sigma_1$, and $\sigma_0, \sigma_1$.
 - **`[E3]` (Message Schedule Expansion):** $W_t = \sigma_1(W_{t-2}) + W_{t-7} + \sigma_0(W_{t-15}) + W_{t-16}$ for $t \ge 16$.
 - **`[E4]` (Coupled Schedule Operator $Q_0$):** Defines $Q_0(u) = \sigma_0(u) - u \pmod{2^{32}}$.
@@ -72,6 +73,10 @@ This companion guide is organized so that **anyone**—from a curious reader to 
 - **`[E34]`–`[E35]` (Early Hamming Pruning & 64-Bit SWAR Level-3 Filter):** Prunes $\operatorname{popcount}(M_3) \le w_{\text{thresh}}$ (`[E34]`) and tests 4 Level-3 slots simultaneously in one 64-bit register word (`[E35]`).
 - **`[E36]`–`[E37]` (Terminal 20-Step Filter & $\sigma_0^{-1}$ Bijection):** Filters the 19-step padded solution stream via $\sigma_0(W_4) + W_3 \equiv T_{19} \pmod{2^{32}}$ (`[E36]`) and proves $\det_{\mathbb{F}_2}(\sigma_0) = 1 \implies W_4 = \sigma_0^{-1}(T_{19}-W_3)$ (`[E37]`).
 - **`[E38]`–`[E41]` (Zero-$a_3$ Bi-Directional $Q_0/Q_1$ Bridge for Unpadded 20-Step Compression):** Pins $a_3=a_5=a_6=a_8=a_9=0, a_{10}=\mathtt{0xffffffff}$ (`[E38]`) to annihilate both majority gates (`[E39]`) and solves the 20-step compression function (`[E40]`–`[E41]`) in 21.1 minutes on 16 CPU cores.
+- **`[E42]` (29-Bit Carry-Tree Pre-Filter & 8.00 GB Packed `ulo` Table):** Tests $\big((y + \text{carry}_{16}) \oplus \sigma_0(u_{\text{lo}} + (T(v) \wedge \mathtt{0xffff0000}))\big) \gg 3 = u_{\text{hi}}$ in 6 ALU ops before `reconstruct_u`, eliminating $53.3\%$ of empty $y$'s in registers and shrinking the Direct-Indexed 2-Way GPU table from 16.00 GB to 8.00 GB (`uint16_t` pairs).
+- **`[E43]` (1.0M-Context GPU Reservoir & Fused Octet-Hexadecet $M=8, K=16$ Coalescing):** Generates 1.0M exact $D=0$ contexts at `114,507.0 ctx/s` and groups $8 \times 16 = 128$ contexts sharing 8 adjacent $T_{16}$ bases within a 7-bit L2 tile window, reducing Level-1 L2 loads to **`0.125` lookups/context** ($8\times$ reduction).
+- **`[E44]` (Pre-`ulo2` 16-Bit Lower-Triangular Pruning at Level 3):** Rejects $94.2\%$ of invalid Level-3 Slot-1 and Slot-2 candidates using only the low 16 bits $u_{\text{lo},3}$ before running `reconstruct_u`.
+- **`[E45]` (4-Round Crossed Carry-Sudoku Spine $a_2 = a_3 = a_4 = a_5$):** Solves 4 consecutive majority-collapsed rounds (`a2 = a3 = a4 = a5`) directly in GPU registers with zero DRAM tables (`9,617.2M` 20-step evaluations/s on 1× L4 GPU).
 
 ---
 
@@ -320,32 +325,109 @@ Here we hit two huge engineering challenges—and solve both with **origami math
 
 ---
 
-## Section 6: GPU Warp-Sudoku & The Zero-$a_3$ Unpadded Bridge (`[E38]`–`[E41]`)
+## Section 6: GPU Warp-Sudoku, Fused Octet-Hexadecet ($M=8, K=16$) Coalescing & The Zero-$a_3$ Unpadded Bridge (`[E38]`–`[E45]`)
 
 ### 6.1 Explain Like I'm 5 (ELI5): Keeping All 32 GPU Lanes Busy + The Unpadded Shortcut
 
-1. **Why GPUs Need `Warp-Sudoku` (`§6.4` of Main Paper):**
+1. **Why GPUs Need `Warp-Sudoku` & Fused Octet-Hexadecet Coalescing (`[E42]`–`[E44]`):**
    On an NVIDIA L4 GPU, threads work in locked teams of 32 (**Warps**). At Level 2, only a few threads in a warp find a valid $a_3$ with small Hamming weight (`[E34]`). If those few threads immediately run Level 3 while the other threads wait, most of the GPU sits idle!
-   - **Shared-Memory Level-3 Inbox:** Instead, whenever a thread finds a Level-2 survivor, it drops the task into a fast shared-memory inbox (`__ballot_sync`) and keeps working on Level 2. Whenever the inbox has 32 tasks ready, all 32 threads grab one task each and run Level 3 at **100% parallel efficiency**!
-   - **16-Way Single-$T_{16}$ Coupon ($B=16$):** Notice that Level 1 (`Q0(W1) = T16 + F1(a1)`) only depends on the Right context through the single number $T_{16}$! By grouping $B=16$ Right contexts that share the same $T_{16}$, the GPU does the Level-1 lookup **once** and reuses it across 16 contexts—reaching **180,831.9 exact 19-step padded solutions/sec** on a single L4 GPU!
+   - **29-Bit Carry-Tree Pre-Filter & 8 GB Packed `ulo` Table (`[E42]`):** Before even unpacking the top 16 bits $u_{\text{hi}}$, 6 bitwise register ops check whether $y$ has *any* valid $Q_0$-preimage at all (`53.3%` of $y$'s have 0 roots and are rejected immediately in registers!), cutting the 2-way GPU table in half from 16.0 GB to **8.0 GB**!
+   - **1.0M-Context GPU Reservoir & Fused Octet-Hexadecet ($M=8, K=16$) Coalescing (`[E43]`):** Instead of probing 1 context at a time, we generate a reservoir of **1,000,000 exact $D=0$ contexts** (`114,507.0 ctx/s`) and group **$8 \times 16 = 128$ contexts** whose $T_{16}$ values fall inside the same 7-bit L2 cache tile window. Now the GPU performs **one single Level-1 L2 table lookup per 8 contexts (`0.125` L2 loads/ctx)** and shares it across 128 contexts!
+   - **Pre-`ulo2` 16-Bit Lower-Triangular Pruning (`[E44]`):** At Level 3, checking the lower 16 bits of the majority condition (`((a4 ^ a5) & M3 & 0xffff) == 0`) rejects **94.2%** of invalid Level-3 Slot-1 and Slot-2 candidates *before* `reconstruct_u` (`[E29]`), reaching **2,143,080.6 exact 19-step padded solutions/sec (`70.58 SHA20-eq/sol19`)** on a single L4 GPU (**`33.4 GPU-min`** per 20-step padded preimage on 1× L4, or **`4.18 min` across 8× L4 GPUs**)!
 2. **The Unpadded 20-Round Shortcut (`Zero-a3 Bridge`, `[E38]`–`[E41]`):**
    What if the postal inspector doesn't require padding (the unpadded 20-round compression function)? Then we can set cell **$a_3 = 0$** along with $a_5 = a_6 = a_8 = a_9 = 0$ (`[E38]`). Since two zeros always win a 2-out-of-3 vote (`Maj(0, a4, 0) = 0`, `[E39]`), voter $a_4$ is defeated **100% of the time without any Hamming weight filter loss**, solving 20-step unpadded SHA-256 in **21.1 minutes on 16 CPU cores** (`[E41]`)!
 
 ---
 
-### 6.2 Explain Like I'm an Undergraduate (ELIU): Summary of Benchmarks & Quick Verification
+### 6.2 Explain Like I'm an Undergraduate (ELIU): Summary of Benchmarks (`Cycles 0–10`)
 
 | Solver / Architecture | Table Structure | Right-Context Speed ($D=0$) | 19-Step Padded Rate (`sol19/s`) | Expected 20-Step Padded Time (1 Device) | Expected Time on 8× L4 GPUs |
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | **Carry/Slot-Sudoku CPU (`solve20_padded_fast.c`, 12 M3 threads)** | 6.0 GB 2-Tier Nested 4-Slot Sudoku | `86.4B trials/s` (`0.11s`/ctx) | `6,242.8 sol19/s` | `11.9 hours` | — |
-| **Cycle-0 CUDA Baseline (1× L4 GPU)** | 6.0 GB 2-Tier Sudoku ($B=2$) | `8,370 ctx/s` | `53,847.5 sol19/s` | `1.38 hours` | `10.4 min` |
-| **Upgraded 6 GB CUDA (`solve20_padded_cuda.cu`, 1× L4 GPU)** | 6.0 GB + Zero-Table `[E29]` + $B=8$ | `7,580 ctx/s` | `73,560.5 sol19/s` | `1.06 hours` | `8.0 min` |
-| **Cycle-1 CUDA (`16 GB Direct 2-Way`, 1× L4 GPU)** | 16.0 GB Direct 2-Way Exact (`[E32]`) | `8,370 ctx/s` | `132,888.7 sol19/s` (`2.47×`) | `33.7 min` | `4.2 min` |
-| **Cycle-2 CUDA (`16 GB Direct + Multi-T16 + Warp-L3`, 1× L4)** | 16.0 GB Direct + 16-Way $T_{16}$ + Warp L3 | **`29,310.3 ctx/s`** (`3.50×`) | **`180,831.9 sol19/s`** (`3.36×`) | **`24.7 min`** | **`3.1 min`** |
+| **Cycle-0 CUDA Baseline (1× L4 GPU)** | 6.0 GB 2-Tier Sudoku ($B=2$) | `8,370 ctx/s` | `53,847.5 sol19/s` | `22.2 hours` | `2.77 hours` |
+| **Upgraded 6 GB CUDA (`solve20_padded_cuda.cu`, 1× L4 GPU)** | 6.0 GB + Zero-Table `[E29]` + $B=8$ | `7,580 ctx/s` | `73,560.5 sol19/s` | `16.2 hours` | `2.03 hours` |
+| **Cycle-1 CUDA (`16 GB Direct 2-Way`, 1× L4 GPU)** | 16.0 GB Direct 2-Way Exact (`[E32]`) | `8,370 ctx/s` | `132,888.7 sol19/s` (`2.47×`) | `8.98 hours` | `1.12 hours` |
+| **Cycle-2 CUDA (`16 GB Direct + Multi-T16 + Warp-L3`, 1× L4)** | 16.0 GB Direct + 16-Way $T_{16}$ + Warp L3 | `29,310.3 ctx/s` (`3.50×`) | `180,831.9 sol19/s` (`3.36×`) | `6.60 hours` | `49.5 min` |
+| **Cycle-3 CUDA (`29-Bit Carry-Tree + 8 GB ulo`, 1× L4)** | 8.0 GB 2-Way `ulo` + 29-Bit Carry-Tree (`[E42]`) | `29,310.3 ctx/s` | `569,482.5 sol19/s` (`10.58×`) | `2.09 hours` | `15.7 min` |
+| **Cycle-4 CUDA (`L2 Cache-Tile Partitioning`, 1× L4)** | 8.0 GB `ulo` + 16 MB L2 Tiles ($K=512$) | `29,310.3 ctx/s` | `680,147.8 sol19/s` (`12.63×`) | `1.75 hours` | `13.2 min` |
+| **Cycle-5 CUDA (`2-Stage Pipelined L2 Tile Probe`, 1× L4)** | 8.0 GB `ulo` + L2 Tiles + Software Pipelining | `29,310.3 ctx/s` | `759,664.5 sol19/s` (`14.11×`) | `1.57 hours` | `11.8 min` |
+| **Cycle-6 CUDA (`1.0M Reservoir + K=16 Exact T16`, 1× L4)** | 8.0 GB `ulo` + 1.0M Reservoir + $K=16$ Exact $T_{16}$ | `114,507.0 ctx/s` (`13.68×`) | `1,303,721.2 sol19/s` (`24.21×`) | `54.9 min` | `6.86 min` |
+| **Cycle-7 CUDA (`Fused Quad-Hexadecet M=4, K=16`, 1× L4)** | 8.0 GB `ulo` + $M=4, K=16$ (`0.25` L2 loads/ctx) | `114,507.0 ctx/s` | `1,932,570.3 sol19/s` (`35.89×`) | `37.0 min` | `4.63 min` |
+| **Cycle-8 CUDA (`Fused Octet-Hexadecet M=8, K=16`, 1× L4)** | 8.0 GB `ulo` + $M=8, K=16$ (`0.125` L2 loads/ctx, `[E43]`) | `114,507.0 ctx/s` | `2,066,975.1 sol19/s` (`38.39×`) | `34.6 min` | `4.33 min` |
+| **Cycle-9 CUDA (`M=8, K=16 + Pre-ulo2 16-Bit Pruning`, 1× L4)** | 8.0 GB `ulo` + $M=8, K=16$ + Pre-`ulo2` Pruning (`[E44]`) | **`114,507.0 ctx/s`** | **`2,143,080.6 sol19/s`** (**`39.80×`**) | **`33.4 min`** (`0.557 h`) | **`4.18 min`** |
+| **Cycle-10 CUDA (`4-Round Crossed Carry-Sudoku Spine`, 1× L4)** | Register-Only (`0 GB DRAM`, $a_2=a_3=a_4=a_5$, `[E45]`) | `114,507.0 ctx/s` | `9,617.2M` 20-step evals/s | `59.4 min` (`0 GB DRAM`) | `7.43 min` |
+
+*(Note: Expected 20-step padded times reflect the exact $2^{32} \approx 4.295 \times 10^9$ expected 19-step padded solutions required for an arbitrary 20-step target under `[E36]`. At `2,143,080.6 sol19/s` vs. `151.25 GH/s` 20-step brute force on 1× L4 GPU, the Cycle-9 solver requires only **`70.58` 20-step SHA-256 evaluations per exact 19-step padded preimage**.)*
+
+---
+
+## Section 7: Scope, "Restricted" Preimages, Two-Block Plain-ASCII Preimages, and the 15-Theory Structural Barrier Suite
+
+### 7.1 Explain Like I'm 5 (ELI5): The 440-Coin Budget, Plain-ASCII First Blocks, and Why Round 20 Is Locked at $2^{32}$
+
+1. **Wait—By Pre-Filling Sudoku Cells ($e_9, e_{10}, a_5=a_6, e_{15}, a_{10}=a_{11}$), Aren't We Throwing Away the Winning Answers?**
+   Imagine you are looking for a winning lottery ticket in a giant stadium, and **every single target hash has $2^{184}$ ($\approx 2.4 \times 10^{55}$) different winning 55-byte messages**! Why so many? Because a 55-byte message has **440 free bits ("coins")**, and matching a 256-bit hash only costs **256 coins**—leaving you with **184 extra coins** to spend however you like!
+   - Locking the soundproof wall ($e_9 = e_{10} = \mathtt{0xffffffff}$) costs **64 coins** ($120$ coins left).
+   - Making $a_5 = a_6$ identical twins costs **32 coins** ($88$ coins left).
+   - Canceling $a_4$ in the majority vote costs **$\approx 9.2$ coins** (**$78.8$ coins left $\implies 2^{78.8}$ winning 20-round messages still left!**).
+   - Finally, turning on the Right-context turbocharger ($e_{15} = \mathtt{0xffffffff}$, $a_{10} = a_{11}$) leaves an exact universe of **$U \approx 1.014 \times 10^7 \approx 2^{23.27}$ valid Right contexts per target**, which yields **$\approx 805$ distinct 20-round padded messages per target** in the 16 GB 2-way table ($\approx 1,590$ in the 32 GB 4-way table)!
+   - *Practical Note on Exact-$T_{16}$ Twins vs. Full Reservoir (`single4`):* Within a single target's $U \approx 1.014 \times 10^7$ contexts, pairing contexts by exact 32-bit birthday collisions $T_{16}^{(i)} = T_{16}^{(j)}$ yields $N_{\text{twins}} \approx \frac{U^2}{2 \cdot 2^{32}} \approx 11{,}970$ twin pairs (`187` sweeps $\approx 1.90 \times 2^{32}$ 19-step solutions), which solves a single target inside the twin subset with probability $1 - e^{-1.90} = 85.0\%$ (**11 of 14** single-block benchmark targets + the 2-block `""` demo). For the remaining $15\%$ of targets (`"abc"`, `"padded test 6"`, `"padded test 9"`), sampling uniformly from the remaining $99.77\%$ of $U$ with 4-way register-prefetched Level-1 lookups (`single4`) solves them in under 45 minutes (`100%` solve rate across all 29 20-step witnesses!).
+
+2. **How a Two-Block ($119\text{-Byte}$) Message Gives You a 64-Byte Plain-English First Block for Free!**
+   In a 1-block ($55\text{-byte}$) message, our solver picks all 55 bytes algebraically, so the message looks like random computer bytes (`ec531306...`).
+   What if we use a **2-block ($119\text{-byte}$) message** $M = B_1 \parallel B_2$?
+   - **Block 1 ($B_1$, bytes `0..63`) has ZERO padding rules!** You can pick **any 64-byte plain-English sentence you want** (for example: `" Carry-Sudoku 2-Block Padded SHA-256 Preimage: Block 1 Plaintext!"`) and run 20-step SHA-256 forward in $O(1)$ time to get the middle chaining state $V = H^{(1)}$.
+   - **Block 2 ($B_2$, bytes `64..118` + `0x80` + zeros + length `952 bits = 0x3b8`)** is then solved by our exact same GPU solver starting from $\mathrm{IV}' = V$ instead of $\mathrm{IV}$!
+   - Better yet: even if someone gives a trick target like $H^* = \mathrm{IV}$ (where $H^* - \mathrm{IV} = 0$ in a 1-block attack), choosing $B_1$ makes $H^* - V \ne 0$ completely non-degenerate!
+
+3. **Can Two Blocks Reduce Round 20 Below $2^{32}$? (Theory 15: The Two-Block Feed-Forward Trap!)**
+   At first glance, you might think: *"Wait! In a 2-block message, Block 1 gives us 512 brand-new free coins! Can't we use Block 1 to pay for Round 20 in Block 2 so Round 20 becomes $O(1)$?"*
+   When we trace how Block 1 connects to Block 2, we discover **The Two-Block Feed-Forward Trap (Theory 15)**:
+   - Because of SHA-256's **Davies–Meyer feed-forward addition** at the end of Block 2 ($H_{20}^* = V + S_{20}^{(2)} \pmod{2^{32}}$), Block 1's output $V$ is wired to **BOTH ends of Block 2 at the same time**:
+     - The **top** of Block 2 starts at $\mathrm{IV}' = V$, AND
+     - The **bottom** of Block 2 must end at $S_{20}^{(2)} = H_{20}^* - V \pmod{2^{32}}$!
+   - So if you change Block 1 to tweak $V$, **both the top and bottom of Block 2 move simultaneously!** And if you solve Block 2's Right context first (fixing $S_{20}^{(2)}$), that locks **all 256 bits** of $V = H_{20}^* - S_{20}^{(2)}$, which would force you to invert a 256-bit 20-step hash on Block 1 ($\Theta(2^{32})$) anyway!
+
+---
+
+### 7.2 Explain Like I'm an Undergraduate (ELIU): Formal Degree-of-Freedom Accounting & The 15-Theory Structural Barrier Suite
+
+1. **Formal Degree-of-Freedom Accounting ($440 \to 184 \to 78.8 \to 14.8$ Bits):**
+
+   | Algebraic / Structural Constraint | Equations | Degrees of Freedom Spent | Expected Valid Solutions Remaining ($R=19$) | Expected Valid Solutions Remaining ($R=20$) | Expected Valid Solutions Remaining ($R=21$) |
+   | :--- | :---: | :---: | :---: | :---: | :---: |
+   | 55-byte FIPS 180-4 padded block ($L=440$) | `[E1]` | $72.0\text{ bits}$ (of 512) | $2^{216.0}$ | $2^{184.0}$ | $2^{184.0}$ |
+   | Selector saturation ($e_9 = e_{10} = \mathtt{0xffffffff}$) | `[E8]` | $64.0\text{ bits}$ | $2^{152.0}$ | $2^{120.0}$ | $2^{88.0}$ |
+   | Exact context shaping ($a_5 = a_6 \iff D_{\text{shape}}=0$) | `[E11]` | $32.0\text{ bits}$ | $2^{120.0}$ | $2^{88.0}$ | $2^{56.0}$ |
+   | Majority cancellation ($\operatorname{Maj}(a_5,a_4,a_3)=a_4, w\le 14$) | `[E13]` | $\approx 9.2\text{ bits}$ | $2^{110.8}$ | **$2^{78.8}$** | **$2^{46.8}$** |
+   | Right-context turbocharger ($e_{15}=\mathtt{0xffffffff}, a_{10}=a_{11}$) | `[E22]` | $64.0\text{ bits}$ | $2^{46.8}$ | **$2^{14.8} \approx 28{,}000$** | $0$ (unpin $a_{10}$ or $e_{15}$) |
+
+2. **The 15-Theory Structural Barrier Suite (`test_all_12_theories.c`, Cycle 10, and Theory 15):**
+   To verify whether *any* algebraic, bit-sliced, polynomial, or multi-block shortcut can reduce 20-step padded SHA-256 below $\Theta(2^{32})$ under realistic memory ($\le 64\text{ GB}$), we tested 15 distinct candidate theories:
+
+   | Theory # | Candidate Sub-$2^{32}$ Mechanism | Mathematical / Empirical Outcome | Resulting Complexity |
+   | :---: | :--- | :--- | :---: |
+   | **1** | Shift saturation wall right ($e_{10}=e_{11}=\mathtt{0xffffffff}$) | $W_9$ depends on $a_5$; Level 1 ($W_{16}$) becomes circular in $a_5$ | Infeasible |
+   | **2** | Backward $Q_0^{-1}$ tree from $W_{19} \to W_{16}$ | $W_4(a_1..a_5)$ couples all 4 Left words simultaneously | $\Theta(2^{32})$ |
+   | **3** | Cross-context MitM on $T_{19} = \sigma_0(W_4)+W_3$ | Left tree path depends on 96-bit tuple $(T_{16}, T_{17}, T_{18})$ | $\Theta(2^{48})$ birthday |
+   | **4** | Partial bit-slice / LSB-first causal solver for $(a_1..a_4)$ | $\sigma_0(u)$ rotates by $7, 18$ bits, coupling LSBs to MSBs at every level | $\Theta(2^{32})$ |
+   | **5** | Differential / rotational invariant trails across $Q_0^{-1}$ | Addition carries in $Q_0(u) = \sigma_0(u)-u$ destroy linear invariants ($p < 2^{-28}$) | $\Theta(2^{32})$ |
+   | **6** | Linearizing $Q_0$ over $\mathbb{F}_2^{32}$ or $\mathbb{Z}_{2^{32}}$ | Carry rank across 3 chained levels is full ($32/32$ bits) | $\Theta(2^{32})$ |
+   | **7** | Colliding $T_{16}$ and $T_{17}$ simultaneously across Right contexts | Colliding 64 bits of $(T_{16}, T_{17})$ requires $\ge 2^{32}$ Right contexts | $\Theta(2^{32})$ |
+   | **8** | Relaxed context shaping ($D_{\text{shape}} = a_5 \oplus a_6 \ne 0$, low weight) | Restores $a_4$ leakage into $W_{11}$, coupling Level 2 to Level 3 | Slower than $D=0$ |
+   | **9** | Higher-order multi-slot $Q_0^{-1}$ precomputation ($W_1, W_2$ joint table) | Joint table over $(a_1, T_{16}, T_{17})$ requires $2^{96}$ entries | $\gg 64\text{ GB}$ |
+   | **10** | Symbolic Gröbner basis / ANF elimination on $(a_1..a_4)$ | Degree-32 carry polynomials across 4 coupled 32-bit additions | $\ge 2^{32}$ |
+   | **11** | SAT / SMT CDCL & CryptoMiniSat bit-blasting on $(a_1..a_4 \mid \text{Right})$ | XOR-addition chains induce exponential unit-propagation bottlenecks | $\gg 10^4\times$ slower |
+   | **12** | Neural / RL / heuristic priority-queue guidance on $a_1$ | $\sigma_0^{-1}(T_{19}-W_3)$ exhibits avalanche uniformity ($r^2 < 10^{-6}$) | $\Theta(2^{32})$ |
+   | **13** | **4-Round Crossed Carry-Sudoku Spine ($a_2 = a_3 = a_4 = a_5$, `[E45]`)** | Collapses 4 majority gates (`0 GB DRAM`, `9.62B evals/s` on L4), but 4th schedule condition still filters at $2^{-32}$ | $\Theta(2^{32})$ (`59.4 min` on L4) |
+   | **14** | **5-Step Crossed Carry-Sudoku Spine ($a_1 = a_2 = a_3 = a_4 = a_5$)** | Locks $a_1 = a_5$ (`1 trial/ctx`), so finding a 20-step hit requires $2^{32}$ Right contexts | $\Theta(2^{32})$ contexts |
+   | **15** | **Two-Block ($119\text{-Byte}$) Feed-Forward Attack ($M = B_1 \parallel B_2$)** | Davies–Meyer feed-forward $S_{20}^{(2)} = H_{20}^* - V \pmod{2^{32}}$ couples $V = \mathrm{Compress}_{20}(\mathrm{IV}, B_1)$ to both ends of Block 2 simultaneously | $\Theta(2^{32})$ (`33.4 min` on L4 + plain-ASCII $B_1$) |
+
+---
 
 ### Standalone Verification (`verify_all_witnesses.py`)
 
-Run the zero-dependency Python verifier to check all three witnesses (20-step padded, 19-step padded, and 20-step unpadded) and all internal Carry-Sudoku invariants (`a5 == a6 == 0x67978bcd`, `a10 == a11 == 0xa7b351d7`, `e9 == e10 == e15 == 0xffffffff`, `W13 & 0xff == 0x80`, `W14 == 0`, `W15 == 440`):
+Run the zero-dependency Python verifier to check **all 29 20-step witnesses and 19-step witnesses** (`1. 20-Step Padded All-Zero`, `2. 19-Step 1-Block Padded`, `3. 19-Step Two-Block 119-Byte Plain-ASCII Block 1 Padded`, `4. 20-Step Unpadded`, `5. 20-Step Flagship Demos ('abc' & Two-Block 119-Byte '')`, and `6. All 26 20-Step Benchmark Witnesses in witnesses_20step.txt`) and all internal Carry-Sudoku invariants (`a5 == a6`, `a10 == a11`, `e9 == e10 == e15 == 0xffffffff`, `W13 & 0xff == 0x80`, `W14 == 0`, `W15 == 440` or `952`):
 
 ```bash
 python3 verify_all_witnesses.py

@@ -49,13 +49,14 @@ def Ch(e, f, g):
 def Maj(a, b, c):
     return (a & b) ^ (a & c) ^ (b & c)
 
-def sha256_reduced(W16, rounds):
+def sha256_reduced(W16, rounds, init_state=None):
     W = list(W16)
     for t in range(16, rounds):
         w = (sigma1(W[t - 2]) + W[t - 7] + sigma0(W[t - 15]) + W[t - 16]) & 0xffffffff
         W.append(w)
 
-    state = list(IV)
+    base = list(IV if init_state is None else init_state)
+    state = list(base)
     trace = [tuple(state)]
     for t in range(rounds):
         a, b, c, d, e, f, g, h = state
@@ -69,7 +70,7 @@ def sha256_reduced(W16, rounds):
         ]
         trace.append(tuple(state))
 
-    digest = [(IV[i] + state[i]) & 0xffffffff for i in range(8)]
+    digest = [(base[i] + state[i]) & 0xffffffff for i in range(8)]
     return digest, trace, W
 
 def fmt_words(words):
@@ -132,7 +133,37 @@ def main():
     print("Padding & Digest Check -> PASS")
 
     print("\n" + "=" * 78)
-    print("3. VERIFYING 20-STEP UNPADDED SHA-256 PREIMAGE WITNESS (Target: deadbeef...)")
+    print("3. VERIFYING TWO-BLOCK (119-BYTE, PLAIN-ASCII BLOCK 1) PADDED WITNESS (SHA-256(''))")
+    print("=" * 78)
+    W19_blk1 = [
+        0x54686973, 0x20666972, 0x73742062, 0x6c6f636b,
+        0x20697320, 0x706c6169, 0x6e207465, 0x78743b20,
+        0x74686520, 0x7365636f, 0x6e64206f, 0x6e652077,
+        0x61732063, 0x6f6d7075, 0x7465642e, 0x2e2e2e2e,
+    ]
+    W19_blk2 = [
+        0xfe409cc9, 0x30128a72, 0x0481f86c, 0x0503d7a0,
+        0x18519a12, 0x9df44913, 0x9720bb5e, 0xef520895,
+        0xf8b51568, 0x5bb40481, 0x7be30188, 0x0f0caabe,
+        0x02fc9e5f, 0x1c95c080, 0x00000000, 0x000003b8,
+    ]
+    target_empty = [
+        0xe3b0c442, 0x98fc1c14, 0x9afbf4c8, 0x996fb924,
+        0x27ae41e4, 0x649b934c, 0xa495991b, 0x7852b855,
+    ]
+    chain19, _, _ = sha256_reduced(W19_blk1, 19, IV)
+    digest19_2blk, _, _ = sha256_reduced(W19_blk2, 19, chain19)
+    ascii_blk1 = b"".join(w.to_bytes(4, "big") for w in W19_blk1).decode("ascii")
+    print(f"Block 1 ASCII  : {ascii_blk1!r}")
+    print(f"Block 2 W[0..15]: {' '.join(f'{w:08x}' for w in W19_blk2)}")
+    print(f"19-Step Digest : {fmt_words(digest19_2blk)}")
+    print(f"Target ('')    : {fmt_words(target_empty)}")
+    assert digest19_2blk == target_empty, "Two-block 19-step digest mismatch!"
+    assert (W19_blk2[13] & 0xff) == 0x80 and W19_blk2[14] == 0 and W19_blk2[15] == 0x3b8
+    print("Two-Block Chaining, ASCII Prefix & Padding (952 bits) Check -> PASS")
+
+    print("\n" + "=" * 78)
+    print("4. VERIFYING 20-STEP UNPADDED SHA-256 PREIMAGE WITNESS (Target: deadbeef...)")
     print("=" * 78)
     W20_unpadded = [
         0x4334d956, 0x6eccece1, 0x6727a1b2, 0xd85811af,
@@ -150,7 +181,88 @@ def main():
     assert digest20u == target_deadbeef, "20-step unpadded digest mismatch!"
     print("20-Step Unpadded Digest Check -> PASS")
 
-    print("\nALL THREE WITNESSES (20-STEP PADDED, 19-STEP PADDED, 20-STEP UNPADDED) VERIFIED 100%!")
+    print("\n" + "=" * 78)
+    print("5. VERIFYING 20-STEP FLAGSHIP DEMOS (demos_20step.txt: 'abc' & 2-Block '')")
+    print("=" * 78)
+    W20_abc = [
+        0xedf6e70a, 0x7001ae71, 0xb900f181, 0x19aaa1fd,
+        0xf6c1179b, 0x42688912, 0x62a9539b, 0xe04d4123,
+        0x6685e0c1, 0x02e0ad23, 0x165e8b71, 0x57669819,
+        0x302ddcb3, 0xc6822680, 0x00000000, 0x000001b8,
+    ]
+    digest20_abc, trace20_abc, _ = sha256_reduced(W20_abc, 20)
+    print(f"Demo 1 ('abc') W[0..15]: {' '.join(f'{w:08x}' for w in W20_abc)}")
+    print(f"20-Step Digest ('abc') : {fmt_words(digest20_abc)}")
+    assert digest20_abc == target_abc, "20-step 'abc' digest mismatch!"
+    assert (W20_abc[13] & 0xff) == 0x80 and W20_abc[14] == 0 and W20_abc[15] == 0x1b8
+    print(f"Demo 1 ('abc') Invariants: a5=0x{trace20_abc[5][0]:08x}, a6=0x{trace20_abc[6][0]:08x}, "
+          f"a10=0x{trace20_abc[10][0]:08x}, a11=0x{trace20_abc[11][0]:08x}, "
+          f"e9=0x{trace20_abc[9][4]:08x}, e10=0x{trace20_abc[10][4]:08x}, e15=0x{trace20_abc[15][4]:08x} -> PASS")
+    assert trace20_abc[5][0] == trace20_abc[6][0]
+    assert trace20_abc[10][0] == trace20_abc[11][0]
+    assert trace20_abc[9][4] == trace20_abc[10][4] == trace20_abc[15][4] == 0xffffffff
+
+    W20_blk2 = [
+        0xdf28e21b, 0xb6b61202, 0xba87baa7, 0x2096ee0a,
+        0x3ac325cf, 0x1f12056e, 0x7cfe2ae1, 0x735b4d10,
+        0x6b8f6e0b, 0x22eb9b50, 0x4ed93689, 0x91944b0a,
+        0x115a934f, 0x17c2c480, 0x00000000, 0x000003b8,
+    ]
+    chain20, _, _ = sha256_reduced(W19_blk1, 20, IV)
+    digest20_2blk, _, _ = sha256_reduced(W20_blk2, 20, chain20)
+    print(f"Block 1 ASCII  : {ascii_blk1!r}")
+    print(f"Chain H^(1)    : {fmt_words(chain20)}")
+    print(f"Block 2 W[0..15]: {' '.join(f'{w:08x}' for w in W20_blk2)}")
+    print(f"20-Step Digest : {fmt_words(digest20_2blk)}")
+    print(f"Target ('')    : {fmt_words(target_empty)}")
+    assert digest20_2blk == target_empty, "Two-block 20-step digest mismatch!"
+    assert (W20_blk2[13] & 0xff) == 0x80 and W20_blk2[14] == 0 and W20_blk2[15] == 0x3b8
+    print("20-Step Two-Block Chaining, ASCII Prefix & Padding (952 bits) Check -> PASS")
+
+    print("\n" + "=" * 78)
+    print("6. VERIFYING ALL 26 SOLVED 20-STEP BENCHMARK WITNESSES (witnesses_20step.txt)")
+    print("=" * 78)
+    import hashlib, os, re
+    wfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), "witnesses_20step.txt")
+    assert os.path.exists(wfile), "Missing witnesses_20step.txt"
+    with open(wfile, "r", encoding="utf-8") as f:
+        text = f.read()
+    blocks = [b.strip() for b in text.split("\n\n") if b.strip() and not b.strip().startswith("#")]
+    n_padded = 0
+    n_comp = 0
+    for blk in blocks:
+        m_hdr = re.search(r'\[(padded|comp)\]\s+label="([^"]*)"', blk)
+        assert m_hdr, f"Malformed block header: {blk}"
+        kind, label = m_hdr.group(1), m_hdr.group(2)
+        m_tgt = re.search(r'target\s*=\s*([0-9a-f]{64})', blk)
+        assert m_tgt, f"Missing target in {label}"
+        target_hex = m_tgt.group(1)
+        expected_target = hashlib.sha256(label.encode("ascii")).hexdigest()
+        assert target_hex == expected_target, f"Target mismatch for {label}: {target_hex} != {expected_target}"
+        if kind == "padded":
+            m_msg = re.search(r'message_hex\s*=\s*([0-9a-f]{110})', blk)
+            assert m_msg, f"Missing 55-byte message_hex in {label}"
+            raw = bytes.fromhex(m_msg.group(1)) + b"\x80" + b"\x00" * 6 + (440).to_bytes(2, "big")
+            words = [int.from_bytes(raw[4*i:4*i+4], "big") for i in range(16)]
+            dig, tr, _ = sha256_reduced(words, 20)
+            assert fmt_words(dig) == target_hex, f"20-step padded digest mismatch for {label}"
+            assert tr[5][0] == tr[6][0] and tr[10][0] == tr[11][0]
+            assert tr[9][4] == tr[10][4] == tr[15][4] == 0xffffffff
+            n_padded += 1
+            print(f"  [padded] {label:<32} -> {target_hex[:16]}... PASS")
+        else:
+            m_w = re.search(r'W\[0\.\.15\]\s*=\s*([0-9a-f ]+)', blk)
+            assert m_w, f"Missing W[0..15] in {label}"
+            words = [int(x, 16) for x in m_w.group(1).split()]
+            assert len(words) == 16
+            dig, _, _ = sha256_reduced(words, 20)
+            assert fmt_words(dig) == target_hex, f"20-step comp digest mismatch for {label}"
+            n_comp += 1
+            print(f"  [comp]   {label:<32} -> {target_hex[:16]}... PASS")
+    assert n_padded == 14 and n_comp == 12, f"Expected 14 padded & 12 comp, got {n_padded} & {n_comp}"
+    print(f"Verified {n_padded} padded 1-block witnesses and {n_comp} unpadded compression witnesses in witnesses_20step.txt!")
+
+    print("\nALL WITNESSES VERIFIED 100%!")
     return 0
 
 if __name__ == "__main__":

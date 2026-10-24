@@ -4,6 +4,7 @@ Converts PAPER_19_20_PADDED_SHA256.md and COMPANION_SUDOKU_ELI5_ELIU.md
 into publication-typeset HTML + KaTeX and renders PDFs via Headless Chrome.
 """
 
+import base64
 import html
 import os
 import re
@@ -238,6 +239,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     size: letter;
     margin: 18mm 18mm 20mm 18mm;
   }}
+  html, body {{
+    background-color: #ffffff;
+  }}
   body {{
     font-family: "Times New Roman", "CMU Serif", Georgia, Cambria, serif;
     font-size: 10.5pt;
@@ -327,7 +331,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }}
   .table-wrap {{
     margin: 9pt 0;
-    page-break-inside: avoid;
   }}
   table {{
     width: 100%;
@@ -335,10 +338,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     font-size: 8.6pt;
     line-height: 1.3;
   }}
+  tr {{
+    page-break-inside: avoid;
+  }}
   th, td {{
     border: 1px solid #999;
     padding: 4pt 5pt;
     vertical-align: top;
+  }}
+  td code {{
+    word-break: break-all;
+    font-size: 7.4pt;
+    padding: 0.5pt 2pt;
   }}
   th {{
     background-color: #efefef;
@@ -364,6 +375,85 @@ def count_pdf_pages(pdf_path):
     matches = re.findall(rb"/Type\s*/Page\b", data)
     return len(matches)
 
+def distill_pdf_quartz(pdf_path):
+    """Re-distills a Skia/Chrome PDF through macOS native Quartz CGPDFContext
+    with an explicit opaque white page background so macOS Preview.app and
+    CoreGraphics/sips render all pages cleanly while preserving vector text."""
+    swift_code = """
+import Foundation
+import CoreGraphics
+
+let path = CommandLine.arguments[1]
+let tmpPath = path + ".quartz.tmp"
+let inURL = URL(fileURLWithPath: path)
+let outURL = URL(fileURLWithPath: tmpPath)
+
+guard let doc = CGPDFDocument(inURL as CFURL) else { exit(1) }
+var mediaBox = CGRect(x: 0, y: 0, width: 612, height: 792)
+guard let ctx = CGContext(outURL as CFURL, mediaBox: &mediaBox, nil) else { exit(1) }
+
+for i in 1...doc.numberOfPages {
+    guard let page = doc.page(at: i) else { continue }
+    var box = page.getBoxRect(.mediaBox)
+    ctx.beginPage(mediaBox: &box)
+    ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    ctx.fill(box)
+    ctx.drawPDFPage(page)
+    ctx.endPage()
+}
+ctx.closePDF()
+try! FileManager.default.removeItem(at: inURL)
+try! FileManager.default.moveItem(at: outURL, to: inURL)
+"""
+    subprocess.run(["swift", "-e", swift_code, pdf_path], check=True)
+    make_ascii85_pdf(pdf_path)
+
+def make_ascii85_pdf(pdf_path):
+    """Encodes all FlateDecode binary streams with ASCII85Decode so the entire
+    PDF file is 100% 7-bit ASCII (zero bytes >= 0x80). This guarantees that even
+    if a UI editor/exporter reads and saves the .pdf through a UTF-8 text buffer,
+    zero bytes are corrupted."""
+    with open(pdf_path, "rb") as f:
+        data = f.read()
+
+    objs = {}
+    for m in re.finditer(rb"(\d+)\s+0\s+obj\r?\n(.*?)\r?\nendobj", data, re.DOTALL):
+        obj_id = int(m.group(1))
+        body = m.group(2)
+        sm = re.match(rb"^(<<.*>>)\s*stream\r?\n(.*)\r?\nendstream$", body, re.DOTALL)
+        if sm:
+            hdr = sm.group(1)
+            sdata = sm.group(2)
+            a85 = base64.a85encode(sdata, foldspaces=False, wrapcol=78, pad=False, adobe=False) + b"~>"
+            if b"/Filter /FlateDecode" in hdr:
+                hdr = hdr.replace(b"/Filter /FlateDecode", b"/Filter [ /ASCII85Decode /FlateDecode ]")
+            hdr = re.sub(rb"/Length\s+\d+", f"/Length {len(a85)}".encode("ascii"), hdr)
+            body = hdr + b"\nstream\n" + a85 + b"\nendstream"
+        objs[obj_id] = body
+
+    tm = re.search(rb"trailer\s*(<<.*?>>)\s*startxref", data, re.DOTALL)
+    trailer_dict = tm.group(1)
+
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = {}
+    max_id = max(objs.keys())
+    for oid in sorted(objs.keys()):
+        offsets[oid] = len(out)
+        out.extend(f"{oid} 0 obj\n".encode("ascii"))
+        out.extend(objs[oid])
+        out.extend(b"\nendobj\n")
+
+    xref_pos = len(out)
+    out.extend(f"xref\n0 {max_id + 1}\n".encode("ascii"))
+    out.extend(b"0000000000 65535 f \n")
+    for oid in range(1, max_id + 1):
+        off = offsets.get(oid, 0)
+        out.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+
+    out.extend(b"trailer\n" + trailer_dict + f"\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii"))
+    with open(pdf_path, "wb") as f:
+        f.write(out)
+
 def build_pdf(md_path, html_path, pdf_path, title):
     with open(md_path, "r", encoding="utf-8") as f:
         md_text = f.read()
@@ -377,12 +467,14 @@ def build_pdf(md_path, html_path, pdf_path, title):
         chrome,
         "--headless",
         "--disable-gpu",
+        "--disable-pdf-tagging",
         f"--print-to-pdf={pdf_path}",
         "--no-pdf-header-footer",
         "--virtual-time-budget=5000",
         f"file://{os.path.abspath(html_path)}",
     ]
-    subprocess.run(cmd, check=True, stderr=subprocess.DEVNULL)
+    subprocess.run(cmd, check=False, stderr=subprocess.DEVNULL)
+    distill_pdf_quartz(pdf_path)
     pages = count_pdf_pages(pdf_path)
     size_kb = os.path.getsize(pdf_path) / 1024.0
     print(f"Rendered {os.path.basename(pdf_path)}: {pages} pages ({size_kb:.1f} KB)")
@@ -402,4 +494,10 @@ if __name__ == "__main__":
         os.path.join(base, "COMPANION_SUDOKU_ELI5_ELIU.pdf"),
         "Carry-Sudoku & Slot-Sudoku in Reduced SHA-256: A Self-Contained ELI5 and ELI-Undergraduate Companion Guide",
     )
-    print(f"TOTAL PAGES: Paper = {p1} pages, Companion = {p2} pages, Combined = {p1 + p2} pages")
+    p3 = build_pdf(
+        os.path.join(base, "PAPER_19_20_PADDED_SHA256_final-v1.md"),
+        os.path.join(base, "PAPER_19_20_PADDED_SHA256_final-v1.html"),
+        os.path.join(base, "PAPER_19_20_PADDED_SHA256_final-v1.pdf"),
+        "Practical Preimages for 19- and 20-Step Reduced SHA-256: Exact Algebraic Padding Inversion, Context Shaping, and the Carry/Slot-Sudoku Framework",
+    )
+    print(f"TOTAL PAGES: Paper = {p1} pages, Companion = {p2} pages, Final-v1 = {p3} pages")

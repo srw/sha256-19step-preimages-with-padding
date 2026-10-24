@@ -78,6 +78,7 @@ if __name__ == '__main__':
         m = os.urandom(n)
         assert sha256_steps(m, 64) == hashlib.sha256(m).digest()
     ok = bad = 0
+    steps = int(sys.argv[2]) if len(sys.argv) > 2 else (20 if '20step' in sys.argv[1] else 19)
     mode = label = target = None
     for line in open(sys.argv[1]):
         line = line.strip()
@@ -88,10 +89,10 @@ if __name__ == '__main__':
             target = line.split('=', 1)[1].strip()
             assert target == hashlib.sha256(label.encode()).hexdigest(), 'target is not SHA-256(label)'
         elif line.startswith('message_hex') and mode == 'padded':
-            got = sha256_steps(bytes.fromhex(line.split('=', 1)[1].strip()), 19).hex()
+            got = sha256_steps(bytes.fromhex(line.split('=', 1)[1].strip()), steps).hex()
             ok, bad = (ok + 1, bad) if got == target else (ok, bad + 1)
         elif line.startswith('W[0..15]') and mode == 'comp':
             words = [int(x, 16) for x in line.split('=', 1)[1].split()]
-            got = compress(words, 19).hex()
+            got = compress(words, steps).hex()
             ok, bad = (ok + 1, bad) if got == target else (ok, bad + 1)
-    print(f'verified {ok} witnesses, {bad} failures (64-step sanity check vs hashlib passed)')
+    print(f'verified {ok} witnesses ({steps}-step), {bad} failures (64-step sanity check vs hashlib passed)')
