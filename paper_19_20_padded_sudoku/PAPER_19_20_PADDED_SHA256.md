@@ -1,17 +1,17 @@
 # Practical Preimages for 19- and 20-Step Reduced SHA-256: Exact Algebraic Padding Inversion, Context Shaping, and Causal Bit-Slice Pruning
 
-**Author:** Sebastian Wain  
+**Author:** Sebastian Wain (`srw@egont.xyz`)  
 **Date:** October 2026  
 **Repositories & Verification Suite:**  
 - 19-Step & 20-Step Padded Witnesses, Paper & Solvers: `https://github.com/srw/sha256-19step-preimages-with-padding`  
 - 20-Step Unpadded Compression Solver & Witness: `https://github.com/srw/sha256-20step-preimages-with-no-padding`  
-- Local Solver & Verification Suite: [`solve20_padded_fast.c`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c) (CPU), [`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu) / [`solve20_padded_cuda_prod.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda_prod.cu) (CUDA GPU), [`solve20_zero_a3.c`](file:///Users/srw/Code/sha-check-eprint/solve20_zero_a3.c) (Zero-$a_3$ Unpadded), [`demos_20step.txt`](file:///Users/srw/Code/sha-check-eprint/demos_20step.txt), [`examples_abc_hello_20step.txt`](file:///Users/srw/Code/sha-check-eprint/examples_abc_hello_20step.txt), [`witnesses_20step.txt`](file:///Users/srw/Code/sha-check-eprint/witnesses_20step.txt), [`FOUND_20ROUND_PREIMAGE.txt`](file:///Users/srw/Code/sha-check-eprint/FOUND_20ROUND_PREIMAGE.txt), [`verify_all_witnesses.py`](file:///Users/srw/Code/sha-check-eprint/verify_all_witnesses.py)
+- Solver & Verification Suite: `solve20_padded_fast.c` (CPU), `solve20_padded_cuda.cu` & `solve20_padded_cuda_prod.cu` (CUDA GPU), `src/pre19.c` (19-Step Chosen-Target CPU), `solve20_zero_a3.c` (Zero-$a_3$ Unpadded), `test_all_12_theories.c` (14-Theory Algebraic Verification Suite), `demos_20step.txt`, `examples_abc_hello_20step.txt`, `witnesses_20step.txt`, `FOUND_20ROUND_PREIMAGE.txt`, `verify_all_witnesses.py`
 
 ---
 
 ## Abstract
 
-We present the first practical preimage attacks on the **19-step** and **20-step reduced SHA-256 hash functions** respecting the standard initial value ($\mathrm{IV}$), Davies–Meyer feed-forward, and full FIPS 180-4 Merkle–Damgård padding [1]. Whereas prior demonstrated preimages at 18–20 steps inverted only the unpadded compression function [6, 7, 9] and padding-aware meet-in-the-middle attacks at 24–47 steps remain strictly theoretical ($\ge 2^{240}$ evaluations) [2, 3, 4, 8], we construct valid 55-byte single-block and 119-byte two-block messages matching prescribed 256-bit digests. Building upon Basra's selector-saturation framework [9], we introduce: (1) an exact $O(1)$ algebraic inversion of the 72-bit FIPS 180-4 padding suffix via bit-disjoint pivot bits of $\Sigma_1(e_{13})$, achieving exact context shaping ($a_5 = a_6$); (2) a causal lower-triangular bit-slice equivalence theorem (**Carry-Sudoku**) that prunes $99.999\%$ of right-hand contexts prior to evaluating $\Sigma_0(a_9)$; and (3) a 5-instruction closed-form $\mathbb{F}_2$ upper-half inverse paired with cache-tiled $Q_0^{-1}$ tables (**Slot-Sudoku**) and 29-bit carry-tree pre-filtering. Our implementation requires $2^{32}$ precomputation evaluations (3.1 s) and achieves an online complexity of $2^{6.14}$ step-reduced evaluations per 19-step padded preimage ($0.47\;\mu\text{s}$ on one NVIDIA L4 GPU) and $2^{38.14}$ evaluations per 20-step padded preimage ($33.4\text{ GPU-minutes}$ on one L4 GPU, or $4.18\text{ minutes}$ across $8\times$ L4 GPUs). We also introduce a Zero-$a_3$ bi-directional bridge for the unpadded 20-step compression function (21.1 minutes on 16 CPU cores) and verify 29 concrete 20-step witnesses across standard public-label targets. These results concern step-reduced SHA-256 (19–20 of 64 steps) and do not threaten full 64-step SHA-256.
+We present practical preimage attacks on the **19-step** and **20-step reduced SHA-256 hash functions** respecting the standard initial value ($\mathrm{IV}$), Davies–Meyer feed-forward, and full FIPS 180-4 Merkle–Damgård padding [1] for arbitrary externally prescribed 256-bit target digests. Whereas prior demonstrated preimages at 18–20 steps primarily inverted the unpadded compression function [6, 7, 9] (with Basra [9] also reporting a 55-byte 20-step padded preimage for a structured target) and padding-aware meet-in-the-middle attacks at 24–47 steps remain strictly theoretical ($\ge 2^{240}$ evaluations) [2, 3, 4, 8], we construct valid 55-byte single-block and 119-byte two-block messages matching arbitrary prescribed 256-bit digests (including $\text{SHA-256}(\text{“abc”})$, $\text{SHA-256}(\text{“hello”})$, $\text{SHA-256}(\text{“”})$, and $0^{256}$). Building upon Basra's selector-saturation and backward padding-absorption framework [9], we introduce: (1) an exact $O(1)$ algebraic inversion of the low padding byte $(W_{13} \bmod 256) = \mathtt{0x80}$ via 8 bit-disjoint pivot bits of $\Sigma_1(e_{13})$ that leaves $(a_5, a_6)$ unconstrained by padding absorption so they can satisfy exact context shaping ($D_{\text{shape}} = a_5 \oplus a_6 = 0$) alongside $\mathrm{Ch}$-annihilation; (2) a causal lower-triangular bit-slice equivalence theorem (**Carry-Sudoku**) that prunes $99.74\%$ of right-hand candidate nodes across 7 causal stages ($99.99\%$ prior to evaluating $\Sigma_0(a_9)$); and (3) a closed-form $\mathbb{F}_2$ upper-half inverse paired with compact $Q_0^{-1}$ tables (**Slot-Sudoku**) and 64-bit SWAR Level-3 filtering. For chosen-target 19-step padded preimages, our single-threaded solver `src/pre19.c` builds a $2^{29}$-entry table in $16.8\text{–}19.1\text{ s}$ ($2 \times 2^{29} = 2^{30}$ $Q_0$ evaluations) and solves arbitrary 256-bit targets in $1.2\text{–}86.4\text{ seconds}$ on 1 CPU core (median $19.45\text{ s}$, mean $30.2\text{ s}$, $\approx 2^{26.7\text{–}26.9}$ context trials + $2^{20.8\text{–}26.8}$ chain starts, $2^{32.51\text{–}32.87}$ 19-step evals). For 20-step padded preimages, our host-verifiable CPU solver `solve20_padded_fast.c` streams $6{,}242.8$ schedule-consistent 19-step padded bridge candidates per second (`sol19/s`, $160.2\;\mu\text{s/sol19}$) on a 10-core Apple M4 CPU ($16$ threads), yielding an expected online time of $191.1\text{ node-hours}$ on 1 16-thread CPU node ($23.9\text{ node-hours}$ across 8 CPU nodes, corresponding to $2^{46.56}$ same-host CPU-reference 20-step evaluations at $151.25\text{ M evals/s}$); in supplementary GPU slice telemetry (`solve20_padded_cuda.cu` on $1\times$ NVIDIA L4), genuine-context streaming reaches $53{,}847.5\text{ sol19/s}$ ($22.16\text{ GPU-h}$) on the 6.00 GiB table and $132{,}888.7\text{ sol19/s}$ ($8.98\text{ GPU-h}$) with genuine Exact-$T_{16}$ twin pairs. We also introduce a Zero-$a_3$ bi-directional bridge for the unpadded 20-step compression function ($21.1\text{ minutes}$ observed / $33.1\text{ minutes}$ expected on 16 CPU cores, $2^{38.13}$ CPU-reference evaluations) and verify **46 distinct** 19- and 20-step witnesses (48 checks including benchmark overlap) across standard public-label and all-zero targets. These results concern step-reduced SHA-256 (19–20 of 64 steps) and do not threaten full 64-step SHA-256.
 
 **Keywords:** SHA-256 · Preimage attack · Reduced-round cryptanalysis · FIPS 180-4 padding · Algebraic context shaping · Bit-slice pruning
 
@@ -22,44 +22,50 @@ We present the first practical preimage attacks on the **19-step** and **20-step
 SHA-256 [1] hashes an $L$-bit message $M$ by appending mandatory Merkle–Damgård strengthening (FIPS 180-4 §5.1.1)—a single `'1'` bit ($\mathtt{0x80}$ at a byte boundary), zero padding bits, and the 64-bit big-endian bit length $L$ in the final two 32-bit words $W_{14}$ and $W_{15}$—before applying a 64-step Davies–Meyer compression function initialized to the standard initial value $\mathrm{IV}$.
 
 In the cryptanalysis of step-reduced SHA-256, a persistent divide has separated **theoretical** attacks from **practical (demonstrated)** preimages:
-- **Theoretical preimage and collision attacks:** Splice-and-cut meet-in-the-middle (MitM), partial-matching, biclique, and MILP-assisted attacks respect FIPS 180-4 padding from 24 steps [2] through 41–43 steps [3, 10], 45 steps [4], and 46–47 steps [8], with related differential and semi-free-start collision advances reaching 24–38 steps [11, 12, 13, 14, 15, 16]. Unlike SHA-1, where full-round collisions have been practically computed [18, 19], all 24–47-step SHA-256 preimage attacks require between $2^{240}$ and $2^{255.6}$ compression evaluations and remain strictly theoretical.
-- **Practical (demonstrated) preimages:** Algebraic and SAT-based encodings produced padded preimages up to 16 steps [5, 20] and three unverified mailing-list messages at 17 steps [17]. More recently, SAT/Cube-and-Conquer [6, 7] and algebraic context shaping [9] produced verified preimages at 18, 19, and 20 steps **exclusively for the unpadded compression function**, where all 16 message words $W_0, \dots, W_{15}$ are unconstrained 32-bit degrees of freedom.
+- **Theoretical preimage and collision attacks:** Splice-and-cut meet-in-the-middle (MitM), partial-matching, biclique, and MILP-assisted attacks respect FIPS 180-4 padding from 24 steps [2] through 41–43 steps [3, 10], 45 steps [4], and 46–47 steps [8], with related differential and semi-free-start collision advances reaching 24–39 steps for SHA-256 (and 40 steps for SHA-224) [11, 12, 14, 15] building on the generalized characteristic framework introduced for SHA-1 in [13]. Unlike SHA-1, where full-round collisions have been practically computed [17, 18], all 24–47-step SHA-256 preimage attacks require between $2^{240}$ and $2^{255.6}$ compression evaluations and remain strictly theoretical.
+- **Practical (demonstrated) preimages:** Algebraic and SAT-based encodings produced padded preimages up to 16 steps [5] and three mailing-list challenge messages at 17 steps (posted without an attack specification) [16]. More recently, SAT/Cube-and-Conquer [6, 7] produced verified preimages at 18 and 19 steps for the unpadded compression function (where all 16 message words $W_0, \dots, W_{15}$ are unconstrained 32-bit degrees of freedom), and Basra [9] introduced algebraic selector saturation and context shaping to solve 19- and 20-step unpadded compression targets as well as a 55-byte 20-step padded preimage for a structured target (`padded_r20` in [9], dated 17 October 2026).
 
 For a single-block 55-byte ($L = 440$-bit) padded message, FIPS 180-4 [1] fixes 72 bits at the end of the message block:
 $$W_{15} = 440 \ (\mathtt{0x000001b8}), \qquad W_{14} = 0 \ (\mathtt{0x00000000}), \qquad W_{13} \bmod 256 = \mathtt{0x80}. \tag{E1}$$
-In backward-and-forward inversion of steps $0..18$ (19-step) or $0..19$ (20-step), $W_{13}, W_{14}, W_{15}$ are tightly coupled with the message schedule expansion $W_{16}, \dots, W_{19}$ and the internal state window $(a_5, \dots, a_{12})$. Satisfying all 72 padding bits simultaneously with the selector-saturation and majority-absorption conditions [9] that decouple the left and right halves of the compression function is the central barrier between unpadded compression preimages and true padded hash preimages.
+In backward-and-forward inversion of steps $0..18$ (19-step) or $0..19$ (20-step), $W_{13}, W_{14}, W_{15}$ are tightly coupled with the message schedule expansion $W_{16}, \dots, W_{19}$ and the internal state window $(a_5, \dots, a_{12})$. Satisfying all 72 padding bits simultaneously with the selector-saturation and majority-absorption conditions [9] that decouple the left and right halves of the compression function is the central barrier to inverting **arbitrary externally prescribed 256-bit targets** for the padded 19- and 20-step hash functions.
 
 ### 1.1 Upfront Demonstration of 19-Step and 20-Step Padded SHA-256 Preimages
 
-To illustrate our results concretely before entering the algebraic derivations, below are four self-verifying **FIPS 180-4 padded preimages** for 20-step and 19-step SHA-256 ($\mathrm{SHA256}_{20}$ and $\mathrm{SHA256}_{19}$ with standard $\mathrm{IV}$, Davies–Meyer feed-forward, and mandatory padding [1]; complete 29-witness suite in §8):
+To illustrate our results concretely before entering the algebraic derivations, below are four self-verifying **FIPS 180-4 padded preimages** for 20-step and 19-step SHA-256 ($\mathrm{SHA256}_{20}$ and $\mathrm{SHA256}_{19}$ with standard $\mathrm{IV}$, Davies–Meyer feed-forward, and mandatory padding [1]; complete 46-witness verification suite in §8):
 
-1. **20-Step Single-Block Padded Preimage for FIPS 180-4 Test Vector $H^* = \text{SHA-256}(\text{``abc''})$:**
+1. **20-Step Single-Block Padded Preimage for FIPS 180-4 Test Vector $H^* = \text{SHA-256}(\text{“abc”})$:**
    ```text
    Target H*          = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
-   55-Byte Message M  = edf6e70a7001ae71b900f18119aaa1fdf6c1179b4268891262a9539be04d41236685e0c102e0ad23165e8b7157669819302ddcb3c68226
+   55-Byte Message M  = edf6e70a7001ae71b900f18119aaa1fdf6c1179b4268891262a9539
+                        be04d41236685e0c102e0ad23165e8b7157669819302ddcb3c68226
    Padded Block W0..7 = edf6e70a 7001ae71 b900f181 19aaa1fd f6c1179b 42688912 62a9539b e04d4123
    Padded Block W8.15 = 6685e0c1 02e0ad23 165e8b71 57669819 302ddcb3 c6822680 00000000 000001b8
    Verification       : SHA256_20(M) == H*  (W13 & 0xff = 0x80, W14 = 0, W15 = 440 bits)
    ```
-2. **19-Step Single-Block Padded Preimage for $H^* = \text{SHA-256}(\text{``abc''})$:**
+2. **19-Step Single-Block Padded Preimages for $H^* = \text{SHA-256}(\text{“abc”})$ and $H^* = \mathtt{0000\dots0000}$:**
    ```text
-   55-Byte Message M  = 8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a
-   Padded Block W8.15 = f5a9158d 8fc06329 0a14a9a6 c55dfa24 5642a024 7ec45a80 00000000 000001b8
-   Verification       : SHA256_19(M) == ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+   'abc' 55B Message  = 8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839
+                        422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a
+   0^256 55B Message  = fc0c9d8eafb2fa329af316940c42a5eb9773cec39e4f7e396182628
+                        7ae767638f92d4ce5fc5eb8cabd7606409364dda27a6c1bb5220246
+   Verification       : SHA256_19(M_abc) == SHA-256("abc") and SHA256_19(M_zero) == 0^256
    ```
 3. **20-Step Single-Block Padded Preimage for All-Zero Digest $H^* = \mathtt{0000\dots0000}$:**
    ```text
    Target H*          = 0000000000000000000000000000000000000000000000000000000000000000
-   55-Byte Message M  = ec531306c85ad4a4ad211d2e1a03ece4d0ad4a0e6b4c2b9436b3babdcbd520597196f52c042b8cd95f1a39f71b58b47b0647c78e65416f
+   55-Byte Message M  = ec531306c85ad4a4ad211d2e1a03ece4d0ad4a0e6b4c2b9436b3bab
+                        dcbd520597196f52c042b8cd95f1a39f71b58b47b0647c78e65416f
    Padded Block W8.15 = 7196f52c 042b8cd9 5f1a39f7 1b58b47b 0647c78e 65416f80 00000000 000001b8
    Verification       : SHA256_20(M) == 0^256  (W13 & 0xff = 0x80, W14 = 0, W15 = 440 bits)
    ```
-4. **20-Step & 19-Step Two-Block (119-Byte, Plain-ASCII Block 1) Padded Preimages for $H^* = \text{SHA-256}(\text{``''})$:**
+4. **20-Step & 19-Step Two-Block (119-Byte, Plain-ASCII Block 1) Padded Preimages for $H^* = \text{SHA-256}(\text{“”})$:**
    ```text
    Target H*          = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
    Block 1 (64B ASCII)= "This first block is plain text; the second one was computed....."
-   20-Step Block 2 M2 = df28e21bb6b61202ba87baa72096ee0a3ac325cf1f12056e7cfe2ae1735b4d106b8f6e0b22eb9b504ed9368991944b0a115a934f17c2c4
-   19-Step Block 2 M2 = fe409cc930128a720481f86c0503d7a018519a129df449139720bb5eef520895f8b515685bb404817be301880f0caabe02fc9e5f1c95c0
+   20-Step Block 2 M2 = df28e21bb6b61202ba87baa72096ee0a3ac325cf1f12056e7cfe2ae
+                        1735b4d106b8f6e0b22eb9b504ed9368991944b0a115a934f17c2c4
+   19-Step Block 2 M2 = fe409cc930128a720481f86c0503d7a018519a129df449139720bb5
+                        eef520895f8b515685bb404817be301880f0caabe02fc9e5f1c95c0
    Padding Suffix     : ...80 00000000 000003b8 (L = 952 bits = 119 bytes; full Merkle-Damgard 2-block chaining)
    ```
 
@@ -68,25 +74,27 @@ To illustrate our results concretely before entering the algebraic derivations, 
 | Work & Reference | Steps | Attacked Object | FIPS 180-4 Padding? | Target Type | Complexity / Runtime | Demonstrated Witness? |
 | :--- | :---: | :--- | :---: | :--- | :--- | :---: |
 | Isobe & Shibutani [2] | 24 | Hash (1 block) | Yes | Arbitrary | $2^{240}$ evaluations | No (theoretical) |
-| Sasaki & Aoki [10] | 41 | Hash | Yes | Arbitrary | $2^{253.5}$ evaluations | No (theoretical) |
+| Sasaki, Wang & Aoki [10] | 41 | Hash | Yes | Arbitrary | $2^{253.5}$ evaluations | No (theoretical) |
 | Aoki et al. [3] | 43 | Hash | Yes | Arbitrary | $2^{254.9}$ evaluations | No (theoretical) |
-| Khovratovich et al. [4] | 45 / 52 | Hash / Compression | Yes / No | Arbitrary | $2^{255.5} / 2^{255.0}$ evaluations | No (theoretical) |
+| Khovratovich et al. [4] | 45 / 52 | Hash / Compression (pseudo) | Yes / No | Arbitrary | $2^{255.5} / 2^{255.0}$ evaluations | No (theoretical) |
 | Guo et al. [8] | 46 / 47 | Hash | Yes | Arbitrary | $2^{254.5} / 2^{255.6}$ evaluations | No (theoretical) |
-| Homsirikamol et al. [5] | 16 | Hash (446-bit) | Yes | Fixed | $\sim 192$ core-h (SAT) | No (not printed) |
-| McDair [17] | 17 | Hash (31B / 55B) | Yes | 1 challenge | Unspecified (no method) | Yes (3 messages) |
+| Homsirikamol et al. [5] | 16 | Hash (446-bit) | Yes | Fixed | $\approx 1\text{ h}$ (Table 1 SAT) | No (not printed) |
+| McDair [16] | 17 | Hash (31B / 55B) | Yes | 1 challenge | Unspecified (no method) | Yes (3 messages) |
 | Davydov et al. [6] | 17 / 18 | Compression | No | All-zero (`00..00`) | Seconds (SAT) | Yes (unpadded only) |
-| Zaikin [7] | 19 | Compression | No | All-ones (`ff..ff`) | 18.5 h on 192 cores (SAT) | Yes (unpadded only) |
-| Basra [9] | 19 / 20 | Compression | No | Arbitrary / `ff..ff` | $0.01\text{ s}$ (19) / $2.45\text{–}16.2\text{ GPU-h}$ (20) | Yes (unpadded only) |
-| **This Work ([`solve20_zero_a3.c`](file:///Users/srw/Code/sha-check-eprint/solve20_zero_a3.c))** | **20** | **Compression** | **No** | **`deadbeef...` + 12 Labels** | **$2^{36.85}$ evals (`21.1 min` 16 CPU cores)** | **Yes (13 witnesses, §8.4)** |
-| **This Work ([`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu))** | **19** | **Full Hash (55B / 119B)** | **Yes [1]** | **Public-label digests** | **$2^{6.14}$ evals (`0.47 µs` 1× L4 GPU)** | **Yes (37+ witnesses, §8.2–§8.4)** |
-| **This Work ([`solve20_padded_cuda_prod.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda_prod.cu))** | **20** | **Full Hash (55B / 119B)** | **Yes [1]** | **`00..00` + 14 Labels + `""`** | **$2^{38.14}$ evals (`33.4 min` 1× L4 / `4.18 min` 8× L4)** | **Yes (16 witnesses, §8.1–§8.4)** |
+| Zaikin [7] | 19 | Compression | No | All-ones (`ff..ff`) | 18 h 33 min on 192 cores (SAT) | Yes (unpadded only) |
+| Basra [9] | 19 / 20 | Compression & Structured Padded | No (19–20) / Yes (20 structured) | Arbitrary (unpadded) / Structured (padded 20) | $\sim 25\text{ s/ctx}$ on H100 (19-step); 20-step unpadded & structured padded | Yes (unpadded & 1 structured padded 20-step) |
+| **This Work (`solve20_zero_a3.c`)** | **20** | **Compression** | **No** | **`deadbeef...` + 12 Labels** | **$33.1\text{ min}$ expected / `21.1 min` observed (16 CPU cores; $2^{38.13}\text{ CPU-ref}$)** | **Yes (13 witnesses, §8.4)** |
+| **This Work (`src/pre19.c` & Exact $D=0$)** | **19** | **Full Hash (55B / 119B)** | **Yes [1]** | **`00..00` + 14 Labels + `""`** | **`1.2–86.4 s` 1-core search (median `19.45 s`, $2^{32.51\text{–}32.87}$ 19-step evals)** | **Yes (16 witnesses, §8.2–§8.4)** |
+| **This Work (`solve20_padded_fast.c` / `cuda.cu`)** | **20** | **Full Hash (55B / 119B)** | **Yes [1]** | **`00..00` + 14 Labels + `""`** | **`191.1 node-h` 1× CPU ($2^{46.56}\text{ CPU-ref}$); *supp. GPU:* `8.98–22.16 h` 1× L4** | **Yes (16 witnesses, §8.1–§8.4)** |
+
+*(Note on Table 1.1: In Khovratovich et al. [4], 45 steps is a full hash preimage and 52 steps is a compression pseudo-preimage; in Basra [9], `padded_r20` solves a structured digest [`c799d851...`] constructed with $e_9 = e_{10} = e_{15} = \mathtt{0xffffffff}$ and $a_5 = a_6 = a_{10}$. For our solvers, we distinguish a **chosen-target 19-step padded preimage**—solving a prescribed 19-step digest $H_{19}^*$ where $a_{12}\dots a_{19}$ are fixed, taking $1.2\text{–}86.4\text{ s}$ of single-core search time in `src/pre19.c` after a $16.8\text{–}19.1\text{ s}$ one-time $2^{29}$-entry table build—from a **19-step bridge candidate (`sol19`)** generated at $6{,}242.8\text{ sol19/s}$ on a 10-core CPU node in `solve20_padded_fast.c` [or $53{,}847.5\text{–}132{,}888.7\text{ sol19/s}$ in supplementary 1× L4 GPU slice telemetry in `solve20_padded_cuda.cu`] during a 20-step search where $a_{12}$ is free. Elapsed-time proxy `CPU-ref` multiplies wall-clock seconds by the measured same-host 10-core CPU 20-step SHA-256 reference rate of $151.25\text{ M evals/s}$, where $1\text{ node-h} = 2^{38.99}\text{ CPU-ref}$; see §6.5.)*
 
 ### 1.2 Technical Contributions and Organization
 
-1. **Exact $O(1)$ Algebraic Inversion of FIPS 180-4 Padding (§3–§4, `[E15]`–`[E22]`):** Extending Basra's selector-saturation framework [9], we exploit the bit-disjointness of $\Sigma_1(e_{13}) \bmod 256$ with respect to bits $18..31$ of $e_{13}$ to invert $(W_{13} \bmod 256) = \mathtt{0x80}$ in $O(1)$ time with $100\%$ inner-loop validity. Combined with $\mathrm{Ch}$-annihilation ($e_{15} = \mathtt{0xffffffff}$, $a_{10} = a_{11}$), this yields exact $D = a_5 \oplus a_6 = 0$ padded contexts without soft-shaping survival loss.
-2. **Causal Bit-Slice Right-Context Pruning ("Carry-Sudoku", §5, `[E23]`–`[E26]`):** We prove **Theorem 1** (`[E23]`): $a_5 = a_6$ decomposes into a lower-triangular carry condition $((S \oplus X) \wedge D) = 0$ that is completely independent of $a_6$ and $\Sigma_0(a_9)$, and a complementary condition $((a_6 \oplus S) \wedge \neg D) = 0$. Pruning $e_{13}$ across 7 causal bit-slices plus rotation-invariant windows of $\Sigma_0(a_9)$ eliminates $99.999\%$ of branches early, generating $114{,}507$ exact $D=0$ padded contexts/s on one NVIDIA L4 GPU.
-3. **Closed-Form $\mathbb{F}_2$ Reconstruction, Cache-Tiled $Q_0^{-1}$ Tables ("Slot-Sudoku"), and Carry-Tree Pre-Filtering (§6, `[E27]`–`[E37]`, `[E42]`–`[E45]`):** We prove **Theorem 2** (`[E28]`–`[E29]`), recovering the upper 16 bits of $u \in Q_0^{-1}(y)$ in 5 bitwise instructions with zero lookup tables. Pairing this with 29-bit carry-tree pre-filtering, L2 cache-tile partitioning, and Octet-Hexadecet $(T_{16}, T_{17})$ coalescing reduces online work to $70.58 \approx 2^{6.14}$ step-reduced SHA-256 evaluations per 19-step padded solution ($2.14 \times 10^6\text{ sol19/s}$ on one L4 GPU).
-4. **Zero-$a_3$ Bi-Directional Bridge, Complete 19- and 20-Step Witness Suites, and Structural Complexity Bounds (§7–§9, `[E38]`–`[E41]`):** We present a Zero-$a_3$ bridge for unpadded 20-step compression (§7), provide the complete, un-truncated hex witnesses for all 19-step and 20-step single-block padded, two-block chosen-ASCII-prefix padded, and unpadded benchmarks (§8), and establish a 15-Theory Structural Barrier Theorem characterizing the exact degree-of-freedom conservation laws at 19, 20, and 21 steps (§9.2).
+1. **Closed-Form Pivot Inversion of FIPS 180-4 Padding Compatible with Exact Context Shaping (§3–§4, `[E15]`–`[E22]`):** Basra [9] showed that the FIPS 180-4 padding words $(W_{15}=440, W_{14}=0, W_{13} \bmod 256 = \mathtt{0x80})$ can be absorbed backward into $(a_7, a_6, a_5)$ at the cost of three context words and demonstrated a 55-byte 20-step padded witness for a structured target (`padded_r20` in [9]). For **arbitrary externally prescribed 256-bit targets**, we show how to absorb $W_{15}=440$ and $W_{14}=0$ into $(a_8, a_7)$ while inverting $(W_{13} \bmod 256) = \mathtt{0x80}$ directly via 8 bit-disjoint pivot bits (`{18, 25..31}`) of $\Sigma_1(e_{13})$ with $100\%$ inner-loop validity—leaving $(a_5, a_6)$ unconstrained by padding absorption so they can satisfy exact shaping $D_{\text{shape}} = a_5 \oplus a_6 = 0$ alongside $\mathrm{Ch}$-annihilation ($e_{15} = \mathtt{0xffffffff}$, $a_{10} = a_{11}$).
+2. **Causal Bit-Slice Right-Context Pruning ("Carry-Sudoku", §5, `[E23]`–`[E25]`):** We prove **Theorem 1** (`[E23]`): $a_5 = a_6$ decomposes into a lower-triangular carry condition $((S \oplus X) \wedge D) = 0$ (where $D = a_8 \oplus a_7$ is the bitwise XOR mask) that is completely independent of $a_6$ and $\Sigma_0(a_9)$, and a complementary condition $((a_6 \oplus S) \wedge \neg D) = 0$. Pruning $e_{13}$ across 7 causal bit-slices reduces the $2^{24}$ candidate space to an average of $43{,}580$ node evaluations per $a_{12}$ block ($385\times$ / $99.74\%$ node reduction across all 7 stages, evaluating $\Sigma_0(a_9)$ only on the $\approx 1{,}660\text{–}2{,}149$ full-carry survivors per block, i.e., $99.99\%$ pre-$\Sigma_0(a_9)$ pruning) with $100\%$ completeness across each $2^{24}$-candidate $a_{12}$ block (and the estimated $U \approx 1.68 \times 10^7 \approx 2^{24.0}$ exact $D_{\text{shape}}=0$ contexts per 20-step target).
+3. **Closed-Form $\mathbb{F}_2$ Reconstruction, Compact $Q_0^{-1}$ Tables ("Slot-Sudoku"), and $T_{16}$ Twin Coalescing (§6, `[E27]`–`[E37]`, `[E42]`–`[E45]`):** We prove **Theorem 2** (`[E28]`–`[E29]`), recovering the upper 16 bits of $u \in Q_0^{-1}(y)$ in closed form in registers with zero lookup tables. Pairing this with compact $Q_0^{-1}$ tables achieves $6{,}242.8\text{ sol19/s}$ on our host-verifiable 10-core CPU solver (`solve20_padded_fast.c`), and $53{,}847.5\text{–}132{,}888.7\text{ sol19/s}$ on genuine contexts in supplementary 1× NVIDIA L4 GPU slice telemetry (`solve20_padded_cuda.cu`).
+4. **Zero-$a_3$ Bi-Directional Bridge, Complete 46-Witness Suite, and Construction-Specific Bottleneck Analysis (§7–§9, `[E38]`–`[E41]`):** We present a Zero-$a_3$ bridge for unpadded 20-step compression (§7), provide the complete, un-truncated hex witnesses for all **46 distinct** 19-step and 20-step single-block padded, two-block chosen-ASCII-prefix padded, unpadded, and regression benchmarks (§8, 48 checks including `"abc"` demo/benchmark overlap), and analyze 15 explored sub-$2^{32}$ algebraic and statistical directions characterizing the degree-of-freedom conservation laws of the Carry-Sudoku / Slot-Sudoku architecture (§9.2).
 
 ---
 
@@ -107,14 +115,14 @@ $$Q_0(u) = \sigma_0(u) - u \pmod{2^{32}}. \tag{E4}$$
 ### 2.1 Reduction to the Scalar $a$-Sequence (`[E5]`–`[E7]`)
 
 Let $(a_t, b_t, c_t, d_t, e_t, f_t, g_t, h_t)$ be the 8 working registers after step $t-1$ (with $t=0$ denoting $\mathrm{IV}$). Because each step shifts $b \leftarrow a, c \leftarrow b, d \leftarrow c$ and $f \leftarrow e, g \leftarrow f, h \leftarrow g$, the entire 8-register trajectory across $R$ steps is uniquely parameterized by a single scalar sequence $a_{-7}, a_{-6}, \dots, a_R$ [3, 9]:
-- **Initial Boundary ($s \in \{-7, \dots, 0\}$):** Fixed uniquely by $\mathrm{IV}$ ([`window_from_state`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c#L101-L115)):
+- **Initial Boundary ($s \in \{-7, \dots, 0\}$):** Fixed uniquely by $\mathrm{IV}$ (`window_from_state` in `solve20_padded_fast.c`):
   $$(a_0, a_{-1}, a_{-2}, a_{-3}) = (\mathrm{IV}_0, \mathrm{IV}_1, \mathrm{IV}_2, \mathrm{IV}_3), \qquad (e_0, e_{-1}, e_{-2}, e_{-3}) = (\mathrm{IV}_4, \mathrm{IV}_5, \mathrm{IV}_6, \mathrm{IV}_7). \tag{E5}$$
 - **Terminal Boundary ($s \in \{R-7, \dots, R\}$):** For an $R$-step target digest $H^* = (H^*_0, \dots, H^*_7)$, Davies–Meyer feed-forward fixes the terminal state $st_i = H^*_i - \mathrm{IV}_i$, which uniquely determines the 8 terminal words $a_{R-7}, \dots, a_R$:
   $$\begin{aligned}
   \text{For } R = 19: &\quad a_{12}, a_{13}, \dots, a_{19} \text{ are fixed by } H^* - \mathrm{IV}, \\
   \text{For } R = 20: &\quad a_{13}, a_{14}, \dots, a_{20} \text{ are fixed by } H^* - \mathrm{IV}.
   \end{aligned} \tag{E6}$$
-- **Internal State & Message Recovery:** For every step index $s$ and $t \in \{0, \dots, R-1\}$, the $e$-register $e_s$ and message word $W_t$ are exact functions of five consecutive $a$-words ([`E_arr`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c#L91-L93) and [`Wt_arr`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c#L95-L99)):
+- **Internal State & Message Recovery:** For every step index $s$ and $t \in \{0, \dots, R-1\}$, the $e$-register $e_s$ is an exact function of five consecutive $a$-words ($a_{s-4}, \dots, a_s$), and the message word $W_t$ is an exact function of $a_{t-3}$ together with five $e$-words ($e_{t-3}, \dots, e_{t+1}$, spanning nine consecutive $a$-words $a_{t-7}, \dots, a_{t+1}$ when expanded; `E_arr` and `Wt_arr` in `solve20_padded_fast.c`):
   $$\begin{aligned}
   e_s &= a_s - \Sigma_0(a_{s-1}) - \mathrm{Maj}(a_{s-1}, a_{s-2}, a_{s-3}) + a_{s-4}, \\
   W_t &= e_{t+1} - a_{t-3} - e_{t-3} - \Sigma_1(e_t) - \mathrm{Ch}(e_t, e_{t-1}, e_{t-2}) - K_t.
@@ -124,7 +132,7 @@ Thus, for $R = 20$ (resp. $R = 19$), the only free internal state variables betw
 
 ---
 
-## 3. Selector Saturation and Exact Context Shaping ($D = 0$)
+## 3. Selector Saturation and Exact Context Shaping ($D_{\text{shape}} = 0$)
 
 In general, $W_{16}, W_{17}, W_{18}, W_{19}$ depend on the Left variables $(a_1, a_2, a_3, a_4)$ both through the early message words $(W_0, W_1, W_2, W_3, W_4)$ on the right-hand side of `[E3]` and through $(W_9, W_{10}, W_{11}, W_{12}, W_{14}, W_{15})$ via the state words $e_5, e_6, e_7, e_8$.
 
@@ -136,44 +144,45 @@ a_5 &= \mathtt{0xffffffff} - a_9 + \Sigma_0(a_8) + \mathrm{Maj}(a_8, a_7, a_6), 
 a_6 &= \mathtt{0xffffffff} - a_{10} + \Sigma_0(a_9) + \mathrm{Maj}(a_9, a_8, a_7).
 \end{aligned} \tag{E9}$$
 
-### 3.1 Exact Shaping ($D = a_5 \oplus a_6 = 0$) (`[E10]`–`[E14]`)
+### 3.1 Exact Shaping ($D_{\text{shape}} = a_5 \oplus a_6 = 0$) vs. Chosen-Target 19-Step Shaping (`[E10]`–`[E14]`)
 
-Let $D_{\text{shape}} = a_5 \oplus a_6$. Under `[E8]`, the dependence of $W_9, W_{10}, W_{11}, W_{12}$ on the Left variables $(a_1, a_2, a_3, a_4)$ collapses to [9]:
+Let $D_{\text{shape}} := a_5 \oplus a_6$ denote the bitwise XOR difference between $a_5$ and $a_6$ (note that $D_{\text{shape}} = 0 \iff a_5 = a_6 \iff a_6 - a_5 \equiv 0 \pmod{2^{32}}$). Under `[E8]` ($e_9 = e_{10} = \mathtt{0xffffffff}$), $\mathrm{Ch}(e_9, e_8, e_7) = e_8$ and $\mathrm{Ch}(e_{10}, e_9, e_8) = \mathrm{Ch}(e_{11}, e_{10}, e_9) = \mathtt{0xffffffff}$. Expanding `[E7]` at $t = 9, 10, 11, 12$ isolates how $W_9, W_{10}, W_{11}, W_{12}$ depend on the Left variables $(a_1, a_2, a_3, a_4)$ [9]:
 $$\begin{aligned}
-W_9 &= c_9 - a_1, \\
-W_{10} &= c_{10} - a_2, \\
-W_{11} &= c_{11} - a_3 - \bigl(\mathrm{Maj}(a_6, a_5, a_4) - (a_6 \wedge a_5)\bigr), \\
-W_{12} &= \text{const}(\text{Right}) + a_4 - \mathrm{Maj}(a_5, a_4, a_3),
+W_9 &= c_9 - a_2 - a_4 + \mathrm{Maj}(a_5, a_4, a_3), \\
+W_{10} &= c_{10} - a_3 + \bigl(\mathrm{Maj}(a_6, a_5, a_4) - (a_6 \wedge a_5)\bigr), \\
+W_{11} &= c_{11} - a_4, \\
+W_{12} &= c_{12} = \text{const}(\text{Right}),
 \end{aligned} \tag{E10}$$
-where $c_9, c_{10}, c_{11}$ depend **only** on the Right context $(a_5, \dots, a_{12})$.
+where $c_9, c_{10}, c_{11}, c_{12}$ depend **only** on the Right context $(a_5, \dots, a_{13})$.
 
 When we enforce **exact context shaping**:
 $$D_{\text{shape}} = a_5 \oplus a_6 = 0 \iff a_5 = a_6, \tag{E11}$$
-the majority term in $W_{11}$ becomes identically constant for **every** $a_4 \in \mathbb{Z}_{2^{32}}$:
-$$\mathrm{Maj}(a_6, a_5, a_4) = \mathrm{Maj}(a_5, a_5, a_4) = a_5 = a_6 \wedge a_5 \implies W_{11} = c_{11} - a_3 \quad (\text{exact, zero } a_4 \text{ leakage}). \tag{E12}$$
-*(In our first-generation 19-step solver `src/pre19.c`, soft shaping $\mathrm{popcount}(a_5 \oplus a_6) \le 3$ leaked $a_4$ into $W_{11}$ on up to 3 bits and reduced chain survival by $2^{\mathrm{popcount}(a_5 \oplus a_6)} = 2\times\text{–}8\times$. Exact shaping `[E11]` eliminates this penalty completely.)*
+the majority term in $W_{10}$ becomes identically constant for **every** $a_4 \in \mathbb{Z}_{2^{32}}$ because $\mathrm{Maj}(a_6, a_5, a_4) = \mathrm{Maj}(a_5, a_5, a_4) = a_5 = a_6 \wedge a_5$, yielding $W_{10} = c_{10} - a_3$ with zero $a_4$ leakage.
+*(For a **chosen 19-step target** $H_{19}^*$, where $a_{12}\dots a_{19}$ are all fixed by `[E6]`, we leave $a_{10} \in [0, 2^{32})$ free instead of setting $a_{10}=a_{11}$, since Step 20 is absent and $e_{15}=\mathtt{0xffffffff}$ is not required. With free $a_{10}$, one can either enforce exact shaping $D_{\text{shape}} = 0$—which produced our 19-step $0^{256}$ witness in §8.2—or use soft shaping $\mathrm{popcount}(a_5 \oplus a_6) \le 3$ as in `src/pre19.c`, which enlarges the context pool by $5{,}489\times$ and generated the 14 public-label 19-step witnesses in Table 8.3 in $1.2\text{–}86.4\text{ s}$ of single-core CPU search time per target after a one-time $16.8\text{–}19.1\text{ s}$ table build.)*
 
-Simultaneously, the remaining nonlinear condition in $W_{12}$ (`[E10]`):
-$$\mathrm{Maj}(a_5, a_4, a_3) = a_4 \iff \bigl((a_4 \oplus a_5) \wedge M_3\bigr) = 0, \qquad M_3 := \neg(a_3 \oplus a_5), \tag{E13}$$
-causes $+a_4$ inside $e_8$ and $-\mathrm{Maj}(a_5, a_4, a_3) = -a_4$ inside $e_7$ to cancel identically in $W_{12}$. Consequently, whenever `[E11]` and `[E13]` hold, $W_{12}, W_{13}, \dots, W_{19}$ are **100% independent of $(a_1, a_2, a_3, a_4)$**. Table 3.1 summarizes the resulting bit-level state conditions across all 20 steps in the format of [3, 8, 11].
+Simultaneously, whenever the remaining nonlinear condition in $W_9$ (`[E10]`) holds, the middle schedule words reduce to exact affine forms in $(a_2, a_3, a_4)$ while $W_{12}, W_{13}, \dots, W_{19}$ are **100% independent of $(a_1, a_2, a_3, a_4)$**:
+$$W_9 = c_9 - a_2, \qquad W_{10} = c_{10} - a_3, \qquad W_{11} = c_{11} - a_4, \qquad W_{12} = c_{12}, \tag{E12}$$
+where $-a_4$ inside $e_8$ and $+\mathrm{Maj}(a_5, a_4, a_3) = +a_4$ inside $e_6$ cancel identically in $W_9$ under the Level-3 majority-absorption condition:
+$$\mathrm{Maj}(a_5, a_4, a_3) = a_4 \iff \bigl((a_4 \oplus a_5) \wedge M_3\bigr) = 0, \qquad M_3 := \neg(a_3 \oplus a_5). \tag{E13}$$
+Table 3.1 summarizes the resulting bit-level state conditions across all 20 steps in the format of [3, 8, 11].
 
 **Table 3.1:** Bit-level state conditions, neutral/coupled words, and schedule constraints across steps $s \in \{-7, \dots, 20\}$.
 
 | Step Range $s$ | Register $a_s$ Condition | Register $e_s$ Condition | Message Word $W_{s-1}$ Role & Constraint | Governing Equation |
 | :---: | :--- | :--- | :--- | :---: |
 | $-7 \dots 0$ | Fixed by $\mathrm{IV}_{0..3}$ | Fixed by $\mathrm{IV}_{4..7}$ | — (Initial boundary) | `[E5]` |
-| $1$ | Free root $a_1 \in \mathbb{Z}_{2^{32}}$ | $e_1(a_1)$ | $W_0 = a_1 + C_{W_0}$ (Carry-tree pre-filtered into L2 tile) | `[E7]`, `[E42]` |
+| $1$ | Free root $a_1 \in \mathbb{Z}_{2^{32}}$ | $e_1(a_1)$ | $W_0 = a_1 + C_{W_0}$ (Root of 3-level Left tree) | `[E7]`, `[E14]` |
 | $2, 3$ | $a_2 = W_1 + G_1$, $a_3 = W_2 + G_2$ | $e_2(a_{1..2})$, $e_3(a_{1..3})$ | $W_1 \in Q_0^{-1}(T_{16}+F_1)$, $W_2 \in Q_0^{-1}(T_{17}+G_2-W_1)$; $\mathrm{wt}(M_3) \le 14$ | `[E14]`, `[E34]` |
 | $4$ | $\bigl((a_4 \oplus a_5) \wedge \neg(a_3 \oplus a_5)\bigr) = 0$ | $e_4(a_{1..4})$ | $W_3 \in Q_0^{-1}(T_{18}+G_3-W_2)$ ($\mathrm{Maj}(a_5,a_4,a_3)=a_4$) | `[E13]`, `[E14]` |
 | $5, 6$ | **Exact Shaping:** $a_5 = a_6$ ($D=0$) | $e_5, e_6$ (coupled) | $W_4$ tested at step 20 via $\sigma_0(W_4)+W_3 = T_{19}$; $W_5$ free | `[E11]`, `[E36]` |
-| $7, 8$ | Closed-form $a_7(e_{13})$, $a_8 = \text{const}$ | $e_7, e_8$ (absorbed) | $W_6, W_7$ free; $+a_4$ in $e_8$ cancels $-\mathrm{Maj}$ in $e_7$ | `[E17]`, `[E22]` |
-| $9, 10$ | $a_9 = e_{13} - c_{e_{13}}$, $a_{10} = a_{11}$ | **$e_9 = e_{10} = \mathtt{0xffffffff}$** | $W_8$ free; $W_9 = c_9 - a_1$ (linear in $a_1$) | `[E8]`, `[E10]` |
-| $11, 12$ | $a_{11}$ fixed by $e_{15}$, $a_{12}$ seed | $e_{11}(e_{13})$, $e_{12} = \text{const}$ | $W_{10} = c_{10} - a_2$, $W_{11} = c_{11} - a_3$ (zero $a_4$ leakage) | `[E12]`, `[E16]` |
-| $13, 14$ | $a_{13}, a_{14}$ fixed by $H^* - \mathrm{IV}$ | $e_{13}$ (7-stage causal), $e_{14}$ | $W_{12} = \text{const}(\text{Right})$; **Padding:** $W_{13} \bmod 256 = \mathtt{0x80}$ | `[E10]`, `[E21]` |
+| $7, 8$ | Closed-form $a_7(e_{13})$, $a_8 = \text{const}$ | $e_7, e_8$ (absorbed) | $W_6, W_7$ free; $-a_4$ in $e_8$ cancels $+\mathrm{Maj}$ in $e_6$ inside $W_9$ | `[E17]`, `[E22]` |
+| $9, 10$ | $a_9 = e_{13} - c_{e_{13}}$, $a_{10} = a_{11}$ | **$e_9 = e_{10} = \mathtt{0xffffffff}$** | $W_8$ free; $W_9 = c_9 - a_2$ (under `[E13]`) | `[E8]`, `[E12]` |
+| $11, 12$ | $a_{11}$ fixed by $e_{15}$, $a_{12}$ seed | $e_{11}(e_{13})$, $e_{12} = \text{const}$ | $W_{10} = c_{10} - a_3$, $W_{11} = c_{11} - a_4$ (zero $a_4$ leakage into $W_{10}$) | `[E12]`, `[E16]` |
+| $13, 14$ | $a_{13}, a_{14}$ fixed by $H^* - \mathrm{IV}$ | $e_{13}$ (7-stage causal), $e_{14}$ | $W_{12} = c_{12}$; **Padding:** $W_{13} \bmod 256 = \mathtt{0x80}$ | `[E12]`, `[E21]` |
 | $15, 16$ | $a_{15}, a_{16}$ fixed by $H^* - \mathrm{IV}$ | **$e_{15} = \mathtt{0xffffffff}$**, $e_{16}$ | **Padding:** $W_{14} = \mathtt{0x00000000}$, $W_{15} = \mathtt{0x000001b8}$ ($440$) | `[E1]`, `[E22]` |
 | $17 \dots 20$ | $a_{17..20}$ fixed by $H^* - \mathrm{IV}$ | $e_{17..20}$ fixed | Schedule words $W_{16..19}$ define $(T_{16}, T_{17}, T_{18}, T_{19})$ | `[E6]`, `[E14]` |
 
-Substituting $W_0 = a_1 + C_{W_0}$ and $a_{t+1} = W_t + G_t(a_1, \dots, a_t)$ into the message schedule equations `[E3]` for $t = 16, 17, 18$ rewrites them as three chained $Q_0$-inversions:
+For $t \in \{1, 2, 3\}$, rearrangement of `[E7]` writes $a_{t+1} = W_t + G_t(a_1, \dots, a_t)$, where $G_t(a_1, \dots, a_t) := \Sigma_0(a_t) + \mathrm{Maj}(a_t, a_{t-1}, a_{t-2}) + e_{t-3} + \Sigma_1(e_t) + \mathrm{Ch}(e_t, e_{t-1}, e_{t-2}) + K_t$. Setting $F_1(a_1) := G_1(a_1) - W_0(a_1)$ and substituting $a_{t+1} = W_t + G_t$ together with `[E12]` ($W_9 = c_9 - a_2$, $W_{10} = c_{10} - a_3$, $W_{11} = c_{11} - a_4$) into the message schedule equations `[E3]` for $t = 16, 17, 18$ rewrites them as three chained $Q_0$-inversions:
 $$\begin{aligned}
 \text{Level 1 } (t=16): &\quad Q_0(W_1) = T_{16} + F_1(a_1), && T_{16} := W_{16} - \sigma_1(W_{14}) - c_9, \\
 \text{Level 2 } (t=17): &\quad Q_0(W_2) = T_{17} + G_2(a_1, a_2) - W_1, && T_{17} := W_{17} - \sigma_1(W_{15}) - c_{10}, \\
@@ -182,9 +191,9 @@ $$\begin{aligned}
 
 ---
 
-## 4. Exact $O(1)$ Algebraic Inversion of FIPS 180-4 Padding (`W13..W15`)
+## 4. Closed-Form Pivot Inversion of FIPS 180-4 Padding (`W13..W15`)
 
-To construct a valid 55-byte single-block padded message (`[E1]`), the Right variables $(a_5, \dots, a_{12})$ must simultaneously satisfy $W_{15} = 440$, $W_{14} = 0$, $(W_{13} \bmod 256) = \mathtt{0x80}$, $e_9 = e_{10} = \mathtt{0xffffffff}$ (`[E8]`), and $a_5 = a_6$ (`[E11]`).
+To construct a valid 55-byte single-block padded message (`[E1]`), the Right variables $(a_5, \dots, a_{12})$ must simultaneously satisfy $W_{15} = 440$, $W_{14} = 0$, $(W_{13} \bmod 256) = \mathtt{0x80}$, $e_9 = e_{10} = \mathtt{0xffffffff}$ (`[E8]`), and $a_5 = a_6$ (`[E11]`). Basra [9] noted that $(W_{15}, W_{14}, W_{13} \bmod 256)$ can be absorbed backward into $(a_7, a_6, a_5)$ at the cost of three context words; below we show how to absorb $W_{15}=440$ and $W_{14}=0$ into $(a_8, a_7)$ while inverting $(W_{13} \bmod 256) = \mathtt{0x80}$ directly via 8 bit-disjoint pivot bits of $\Sigma_1(e_{13})$, leaving $(a_5, a_6)$ unconstrained by padding absorption so they can satisfy exact shaping $a_5 = a_6$ (`[E23]`).
 
 ### 4.1 Closed-Form Absorption of $W_{15} = 440$ and $W_{14} = 0$ (`[E15]`–`[E17]`)
 
@@ -203,7 +212,7 @@ Then $a_8$ and $a_7$ are recovered in closed form:
 $$a_8 = e_{12} + \Sigma_0(a_{11}) - a_{12} + \mathrm{Maj}(a_{11}, a_{10}, a_9), \qquad a_7 = e_{11} + \Sigma_0(a_{10}) - a_{11} + \mathrm{Maj}(a_{10}, a_9, a_8). \tag{E17}$$
 Thus **every** choice of $(a_{12}, a_{11}, a_{10}, e_{13})$ satisfies $W_{15} = 440$ and $W_{14} = 0$ identically.
 
-### 4.2 Exact $O(1)$ Pivot Inversion of $(W_{13} \bmod 256) = \mathtt{0x80}$ (`[E18]`–`[E22]`)
+### 4.2 Closed-Form Pivot Assignment for $(W_{13} \bmod 256) = \mathtt{0x80}$ (`[E18]`–`[E22]`)
 
 Since $e_{10} = \mathtt{0xffffffff}$, the formula for $W_{13}$ (`[E7]`) is:
 $$W_{13} = \underbrace{(e_{14} - a_{10} - \mathtt{0xffffffff} - K_{13})}_{c_{W_{13}}} - \Sigma_1(e_{13}) - \mathrm{Ch}(e_{13}, e_{12}, e_{11}). \tag{E18}$$
@@ -221,18 +230,18 @@ Therefore, for any assignment to bits $0..17$ of $e_{13}$ ($e_{13,\text{base}}$)
 $$\Delta := \bigl(R_{\text{lo}} \oplus \Sigma_1(e_{13,\text{base}})\bigr) \bmod 256, \qquad e_{13,\text{fixed}} := e_{13,\text{base}} \;\middle|\; \bigl((\Delta \wedge \mathtt{0x7f}) \ll 25\bigr) \;\middle|\; \bigl(((\Delta \gg 7) \wedge 1) \ll 18\bigr), \tag{E21}$$
 while bits $19..24$ remain 6 completely free degrees of freedom where **$100\%$ of assignments satisfy $(W_{13} \bmod 256) = \mathtt{0x80}$**.
 
-Finally, in [`solve20_padded_fast.c`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c#L1360-L1381) and [`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L954-L975), we apply **$\mathrm{Ch}$-annihilation** by pinning $e_{15} = \mathtt{0xffffffff}$ (fixing $a_{11}$ from $a_{12}$ via `[E15]`) and setting $a_{10} = a_{11}$. This simultaneously forces $\mathrm{Ch}(e_{15}, e_{14}, e_{13}) = e_{14}$ (**making $e_{12}$ and $a_8$ 100% constant across all $2^{24}$ choices of $e_{13}$**), simplifies $\mathrm{Maj}(a_{11}, a_{10}, a_9) = a_{11}$, and linearizes $\mathrm{Maj}(a_{10}, a_9, a_8) = (a_{10} \wedge a_8) + ((a_{10} \oplus a_8) \wedge a_9)$:
+Finally, in `solve20_padded_fast.c` and `solve20_padded_cuda.cu`, we apply **$\mathrm{Ch}$-annihilation** by pinning $e_{15} = \mathtt{0xffffffff}$ (fixing $a_{11}$ from $a_{12}$ via `[E15]`) and setting $a_{10} = a_{11}$. This simultaneously forces $\mathrm{Ch}(e_{15}, e_{14}, e_{13}) = e_{14}$ (**making $e_{12}$ and $a_8$ 100% constant across all $2^{24}$ choices of $e_{13}$**), simplifies $\mathrm{Maj}(a_{11}, a_{10}, a_9) = a_{11}$, and linearizes $\mathrm{Maj}(a_{10}, a_9, a_8) = (a_{10} \wedge a_8) + ((a_{10} \oplus a_8) \wedge a_9)$:
 $$e_{15} = \mathtt{0xffffffff}, \quad a_{10} = a_{11} \implies e_{12} = c_{e_{12}} - e_{14} = \text{const}, \quad a_8 = e_{12} + \Sigma_0(a_{11}) - a_{12} + a_{11} = \text{const}. \tag{E22}$$
 
 ---
 
-## 5. Carry-Sudoku: 7-Stage Causal Bit-Slice & Rotation-Invariant Right-Context Search
+## 5. Carry-Sudoku: 7-Stage Causal Bit-Slice Right-Context Search
 
-Even with `[E21]`–`[E22]`, each $a_{12}$ defines $2^{24}$ padded candidates for $e_{13}$, and testing $a_5 = a_6$ (`[E11]`) naively requires evaluating $\Sigma_0(a_9)$ and $a_6$ across those candidates. We now prove that causal lower-triangular bit-slice pruning—which we term **Carry-Sudoku**—eliminates **$99.999\%$ of all $e_{13}$ branches** *before* $\Sigma_0(a_9)$ or $a_6$ is ever computed.
+Even with `[E21]`–`[E22]`, each $a_{12}$ defines $2^{24}$ padded candidates for $e_{13}$, and testing $a_5 = a_6$ (`[E11]`) naively requires evaluating $\Sigma_0(a_9)$ and $a_6$ across those candidates. We now prove that causal lower-triangular bit-slice pruning—which we term **Carry-Sudoku**—reduces the $2^{24}$ candidate tree to an average of $43{,}580$ node evaluations ($99.74\%$ pruning, or $385\times$ fewer evaluations) *before* $\Sigma_0(a_9)$ or $a_6$ is ever computed.
 
 ### 5.1 The Exact Equivalence Theorem (`[E23]`)
 
-**Theorem 1 (Carry-Sudoku Exact Equivalence).** *Under `[E9]`, define $X := \mathtt{0xffffffff} - a_9 + \Sigma_0(a_8)$, $D := a_8 \oplus a_7$, and $S := X + \mathrm{Ch}(D, X, a_8) \pmod{2^{32}}$. Then:*
+**Theorem 1 (Carry-Sudoku Exact Equivalence).** *Under `[E9]`, define $X := \mathtt{0xffffffff} - a_9 + \Sigma_0(a_8)$, the bitwise XOR mask $D := a_8 \oplus a_7$, and $S := X + \mathrm{Ch}(D, X, a_8) \pmod{2^{32}}$. Then:*
 $$a_5 = a_6 \iff \Bigl(\bigl((S \oplus X) \wedge D\bigr) = 0\Bigr) \;\wedge\; \Bigl(\bigl((a_6 \oplus S) \wedge \neg D\bigr) = 0\Bigr). \tag{E23}$$
 
 *Proof.* By `[E9]`, $a_5 = X + \mathrm{Maj}(a_8, a_7, a_6)$. Decompose $\mathrm{Maj}(a_8, a_7, a_6)$ bitwise with respect to $D = a_8 \oplus a_7$:
@@ -243,29 +252,29 @@ Hence $\mathrm{Maj}(a_8, a_7, a_6) = (D \wedge a_6) \oplus (\neg D \wedge a_8) =
   - If $D_b = 1$, then $\mathrm{Ch}(D, a_6, a_8)_b = a_{6,b}$, so $a_{5,b} = X_b \oplus a_{6,b} \oplus c_b$. Thus $a_{5,b} = a_{6,b} \iff X_b \oplus c_b = 0$, and when $X_b \oplus c_b = 0$, the outgoing carry from bit $b$ is $\mathrm{Maj}(X_b, a_{6,b}, c_b) = X_b = \mathrm{Maj}(X_b, X_b, c_b)$, which is **identical** to the outgoing carry of $S = X + \mathrm{Ch}(D, X, a_8)$ where $S_b = X_b \oplus X_b \oplus c_b = c_b = X_b$, i.e. $(S_b \oplus X_b) = 0$.
   - If $D_b = 0$, then $\mathrm{Ch}(D, a_6, a_8)_b = a_{8,b} = \mathrm{Ch}(D, X, a_8)_b$, so $a_{5,b} = S_b$ and the outgoing carry is again identical to that of $S$. Thus $a_{5,b} = a_{6,b} \iff a_{6,b} = S_b$. $\square$
 
-### 5.2 7-Stage Causal Bit-Slice Pruning & Rotation-Invariant $\Sigma_0(a_9)$ Windows (`[E24]`–`[E26]`)
+### 5.2 7-Stage Causal Bit-Slice Pruning (`[E24]`–`[E26]`)
 
 Theorem 1 has a decisive algorithmic consequence: the first condition in `[E23]`,
 $$\bigl((S \oplus X) \wedge D\bigr) = 0, \qquad S = X + \mathrm{Ch}(D, X, a_8), \tag{E24}$$
 **does not depend on $a_6$ or $\Sigma_0(a_9)$ at all**, and because $a_9 = e_{13} - c_{e_{13}}$, $X = c_{a_5} - a_9$, and $a_7 = c_{a_7,\text{full}} - (e_{14} \wedge e_{13}) + ((a_{10} \oplus a_8) \wedge a_9)$ involve only bitwise operations and modular additions/subtractions, **the lowest $k$ bits of $X, a_7, D$, and $S$ depend exclusively on the lowest $k$ bits of $e_{13}$**.
 
-Consequently, [`ctx_gen_worker`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c#L1348-L1506) (CPU) and [`ctx_gen_cuda_kernel`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L922-L1102) (GPU) assign $e_{13}$ from LSB to MSB in **7 causal stages** (formalized in **Algorithm 1**):
+Consequently, `ctx_worker` (`solve20_padded_fast.c`) on CPU and `ctx_gen_cuda_kernel` / `ctx_gen_fast_cuda_kernel` (`solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu`) on GPU assign $e_{13}$ from LSB to MSB in **7 exact causal stages** (formalized in **Algorithm 1**):
 $$\begin{aligned}
 \text{Stage 1a (bits } 0..3\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0xf}\bigr) = 0, \\
 \text{Stage 1b (bits } 4..7\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0xff}\bigr) = 0 \implies \text{fixes } R_{\text{lo}} \text{ and } (e_{13})_{18} \oplus (e_{13})_{13}, \\
 \text{Stage 1c (bits } 8..11\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0xfff}\bigr) = 0, \\
 \text{Stage 1d (bits } 12..14 + \text{exact bit } 18\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0x7fff}\bigr) = 0, \\
-\text{Stage 1e (bits } 15..17, \text{ checked to bit } 18\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0x7ffff}\bigr) = 0 \implies \text{fixes bits } 25..31 \text{ via `[E21]`}.
+\text{Stage 1e (bits } 15..17, \text{ checked to bit } 18\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0x7ffff}\bigr) = 0 \implies \text{fixes bits } 25..31 \text{ via `[E21]`}, \\
+\text{Stage 2a (bits } 19..21\text{):} &\quad \bigl((S \oplus X) \wedge D \wedge \mathtt{0x3fffff}\bigr) = 0, \\
+\text{Stage 2b (bits } 22..24\text{):} &\quad \bigl((S \oplus X) \wedge D\bigr) = 0 \;\wedge\; \bigl((a_6 \oplus S) \wedge \neg D\bigr) = 0.
 \end{aligned} \tag{E25}$$
-In Stage 1d, once bit 13 of $e_{13}$ is chosen, bit 18 of $e_{13}$ is immediately determined by $(R_{\text{lo}} \gg 7) \oplus (e_{13})_0 \oplus (e_{13})_{13}$ (`[E20]`), allowing Stage 1e to test a **19-bit Carry-Sudoku mask (`0x7ffff`)** on 18 chosen bits *before* $\Sigma_1(e_{13,\text{base}})$ is evaluated.
-
-Next, once bits $0..18$ and $25..31$ are fixed (26 of 32 bits of $e_{13}$), only bits $19..24$ (`s19` and `s22`) remain free. Under $\Sigma_0(a_9) = \mathrm{ROR}(a_9,2) \oplus \mathrm{ROR}(a_9,13) \oplus \mathrm{ROR}(a_9,22)$, bits $19..24$ of $a_9$ (allowing 1 carry bit into bit 25) land exclusively in bit ranges `[17..23]`, `[6..12]`, and `[29..31, 0..2]`. Consequently, **bits `13..15` and `3..4` of $\Sigma_0(a_9)$ are $100\%$ rotation-invariant across all 64 values of bits $19..24$**. Since $S$ and $D$ are already fixed through bit 18, we check the exact equivalence `a6_0 == a5_0` on those two rotation-invariant slices (`Stage 2`) before looping over `s19` (`Stage 3a`, mask `0x3fffff`) and `s22` (`Stage 3b`, full 32-bit `[E23]`):
-$$\bigl(((a_{6,0} - a_{5,0}) \gg 13) + 1\bigr) \wedge \mathtt{0xe} = 0 \quad\wedge\quad \bigl(((a_{6,0} - a_{5,0}) \gg 3) + 1\bigr) \wedge \mathtt{0x6} = 0. \tag{E26}$$
+$$\text{[Equation (E26) retired in Round 2: former heuristic pre-\texttt{s19} }\Sigma_0(a_9)\text{ window check omitted for 100\% completeness.]} \tag{E26}$$
+In Stage 1d, once bit 13 of $e_{13}$ is chosen, bit 18 of $e_{13}$ is immediately determined by $(R_{\text{lo}} \gg 7) \oplus (e_{13})_0 \oplus (e_{13})_{13}$ (`[E20]`), allowing Stage 1e to test a **19-bit Carry-Sudoku mask (`0x7ffff`)** on 18 chosen bits *before* $\Sigma_1(e_{13,\text{base}})$ is evaluated. Once Stage 1e fixes bits $25..31$ via `[E21]`, Stages 2a and 2b sweep the remaining 6 free bits $19..24$ (`s19` and `s22`) using a 22-bit mask (`0x3fffff`) followed by the full 32-bit Carry-Sudoku check and exact equivalence `[E23]`. *(Note: we do not pre-filter bits $13..15$ or $3..4$ of $a_6 - a_5$ [`[E26]`] before `s19` and `s22` are chosen, because bits $19..24$ of $e_{13}$ enter $\mathrm{Maj}(a_9, a_8, a_7)$ and $a_9 = e_{13} - c_{e_{13}}$ with carry propagation; omitting any pre-`s19` window check guarantees 100% completeness across each $2^{24}$-candidate $a_{12}$ block by Theorem 1 (`[E23]`–`[E25]`), confirmed with zero missed contexts against exhaustive brute-force across $300 \times 2^{24}$ candidate $e_{13}$ blocks and demonstrated on seed block `a_12 = 0x1ee9c019` [where 2 of 8 exact $D_{\text{shape}}=0$ contexts were rejected by `[E26]`] in `solve20_padded_fast.c` and `verify_all_witnesses.py` §8.)*
 
 ```text
 Algorithm 1: Causal 7-Stage Carry-Sudoku Right-Context Generator
 Input: Target terminal words a_{13}..a_{20} = H* - IV, seed range a_{12} in [0, 2^32)
-Output: Reservoir R of exact D = (a_5 ^ a_6) == 0 FIPS 180-4 padded contexts
+Output: Reservoir R of exact D_shape = (a_5 ^ a_6) == 0 FIPS 180-4 padded contexts
 1.  for each seed a_{12} in parallel do
 2.    Set e_{15} = 0xffffffff; compute a_{11} via [E15] and set a_{10} = a_{11}            // [E22] Ch-annihilation
 3.    Compute constants e_{16}, e_{14}, e_{12} = c_{e12} - e_{14}, and a_8 = const          // [E16]-[E17]
@@ -273,13 +282,13 @@ Output: Reservoir R of exact D = (a_5 ^ a_6) == 0 FIPS 180-4 padded contexts
 5.    Compute low-byte padding target R_lo = (c_{W13} - Ch(e_{13}, e_{12}, e_{11}) - 0x80) mod 256  // [E19]
 6.    Sweep bits 8..11, 12..14 (fixing bit 18 via [E20]), and 15..17 filtering masks 0xfff, 0x7fff, 0x7ffff
 7.    Fix bits 25..31 of e_{13} in O(1) via Delta = (R_lo ^ Sigma_1(e_{13,base})) mod 256   // [E21]
-8.    Test rotation-invariant Sigma_0(a_9) windows on bits 13..15 and 3..4                  // [E26] Stage 2
-9.    for s_{19} in 0..7 (mask 0x3fffff) and s_{22} in 0..7 do                              // Stage 3a, 3b
-10.     if ((S ^ X) & D) == 0 and ((a_6 ^ S) & ~D) == 0 then                                // Theorem 1 [E23]
-11.       Append context (a_5..a_{12}, T_{16}, T_{17}, T_{18}, T_{19}) to Reservoir R
+8.    for s_{19} in 0..7 filtering ((S ^ X) & D & 0x3fffff) == 0 do                         // Stage 2a
+9.      for s_{22} in 0..7 do                                                               // Stage 2b
+10.       if ((S ^ X) & D) == 0 and ((a_6 ^ S) & ~D) == 0 then                              // Theorem 1 [E23]
+11.         Append context (a_5..a_{12}, T_{16}, T_{17}, T_{18}, T_{19}) to Reservoir R
 ```
 
-On GPU ([`generate_right_ctx_gpu_kernel`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L9280-L9365)), mapping Algorithm 1 onto warp-cooperative lockstep stages generates **$114{,}507$ exact $D=0$ padded contexts per second** on 1× NVIDIA L4 GPU ($1{,}048{,}576$ contexts in $9.16\text{ seconds}$).
+Across $10{,}000$ random $a_{12}$ blocks, Algorithm 1 evaluates an average of only $43{,}580$ inner-loop nodes per $2^{24}$ block ($16.0 + 80.4 + 412.9 + 1{,}043.8 + 3{,}507.8 + 8{,}845.4 + 29{,}673.5$), generating **$266.8$ exact $D_{\text{shape}}=0$ padded contexts per second** on 16 CPU threads ($3.75\;\text{ms/context}$, `solve20_padded_fast.c`) and **$29{,}310\text{–}114{,}507$ contexts per second** in supplementary 1× NVIDIA L4 GPU telemetry (`solve20_padded_cuda.cu`, $8.73\text{–}34.1\;\mu\text{s/context}$).
 
 ---
 
@@ -287,39 +296,53 @@ On GPU ([`generate_right_ctx_gpu_kernel`](file:///Users/srw/Code/sha-check-eprin
 
 With an exact $D = a_5 \oplus a_6 = 0$ padded Right context in hand, we solve the three chained $Q_0^{-1}$ equations `[E14]` from Left to Right.
 
-### 6.1 Closed-Form 5-Instruction $\mathbb{F}_2$ Inverse (`reconstruct_u`, `[E27]`–`[E29]`)
+### 6.1 Closed-Form Zero-Table $\mathbb{F}_2$ Inverse (`reconstruct_u`, `[E27]`–`[E29]`)
 
-Storing full 32-bit preimages $u$ of $y = Q_0(u) = \sigma_0(u) - u$ requires 4 bytes per slot. Splitting $u = (u_{\text{hi}} \ll 16) \mid u_{\text{lo}}$ with $u_{\text{lo}}, u_{\text{hi}} \in [0, 65535]$, modular addition gives $(u + y) \bmod 2^{17} = \sigma_0(u) \bmod 2^{17}$, and $\mathbb{F}_2$-linearity of $\sigma_0$ gives:
-$$\sigma_0(u_{\text{hi}} \ll 16) \equiv (u + y) \oplus \sigma_0(u_{\text{lo}}) \pmod{2^{17}}. \tag{E27}$$
-Rather than inverting `[E27]` with a 128 KB lookup table (which incurs ~200 billion random L1 loads per sweep and contends with $Q_0^{-1}$ loads), we prove that `[E27]` has an **exact 5-instruction register closed form**:
+Storing full 32-bit preimages $u$ of $y = Q_0(u) = \sigma_0(u) - u$ requires 4 bytes per slot. Splitting $u = U + u_{\text{lo}}$ where $U := (u_{\text{hi}} \ll 16)$ and $u_{\text{lo}}, u_{\text{hi}} \in [0, 65535]$, note that $U \equiv 0 \pmod{2^{16}}$, so carry propagation from bits $0..15$ into bit $16$ of $u + y = U + (u_{\text{lo}} + y)$ is purely additive (XOR) at bit $16$: $(u + y) \equiv U \oplus (u_{\text{lo}} + y) \pmod{2^{17}}$. Since $u + y \equiv \sigma_0(u) = \sigma_0(U) \oplus \sigma_0(u_{\text{lo}}) \pmod{2^{17}}$, rearranging terms yields the exact 17-bit identity:
+$$\sigma_0(U) \oplus U \equiv (u_{\text{lo}} + y) \oplus \sigma_0(u_{\text{lo}}) \pmod{2^{17}}. \tag{E27}$$
+Rather than inverting `[E27]` solely with a 128 KiB lookup table (`REC_HI16[rec_idx(ulo, y)]` in `solve20_padded_fast.c`), we prove that `[E27]` has an **exact register closed form** with zero lookup tables:
 
-**Theorem 2 (Closed-Form $\mathbb{F}_2$ Inverse of Upper 16 Bits).** *Let $v = (u_{\text{lo}} + y) \oplus \sigma_0(u_{\text{lo}}) \pmod{2^{32}}$, and let $U = u_{\text{hi}} \ll 16 \in \mathbb{F}_2^{32}$ have bits in positions $16..31$. Define the linear operator $L(T) := T \oplus (T \ll 11) \oplus (T \ll 15) \pmod{2^{32}}$ on upper-half words $T$. Then $L$ is a triangular bijection on bits $16..31$ with $U = L(T)$, where $T$ is given in closed form by:*
+**Theorem 2 (Closed-Form $\mathbb{F}_2$ Inverse of Upper 16 Bits).** *Let $v = (u_{\text{lo}} + y) \oplus \sigma_0(u_{\text{lo}}) \pmod{2^{32}}$, and let $U = u_{\text{hi}} \ll 16 \in \mathbb{F}_2^{32}$ have bits in positions $16..31$ (with $U_{0..15} = 0$). Define the linear operator $L(T) := T \oplus (T \ll 11) \oplus (T \ll 15) \pmod{2^{32}}$ on upper-half words $T$. Then $L$ is a triangular bijection on bits $16..31$ with $U = L(T)$, where $T$ is given in closed form by:*
 $$\begin{aligned}
 b_0 &= \bigl((v \ll 15) \oplus (v \ll 11) \oplus v\bigr) \wedge \mathtt{0x00010000}, \\
 b_{12} &= \bigl((v \ll 14) \oplus (v \ll 3)\bigr) \wedge \mathtt{0x00060000}, \\
 T &= b_0 \;\middle|\; b_{12} \;\middle|\; \bigl((v \ll 18) \wedge \mathtt{0xfff80000}\bigr),
 \end{aligned} \tag{E28}$$
-*and the full 32-bit preimage is recovered in 5 bitwise instructions ([`reconstruct_u_dev`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L1297-L1303)):*
+*and the full 32-bit preimage is recovered in registers (`reconstruct_u_dev` in `solve20_padded_cuda.cu` and `reconstruct_u_e28` in `test_all_12_theories.c`, using 5 logical stages / ~19 bitwise/ALU operations and zero lookup tables):*
 $$u = u_{\text{lo}} \;\middle|\; \bigl(T \oplus (T \ll 11) \oplus (T \ll 15)\bigr). \tag{E29}$$
 
-*Proof.* On bits $0..16$, $\sigma_0(U) = \mathrm{ROR}(U,7) \oplus \mathrm{ROR}(U,18) \oplus (U \gg 3)$ places $U_{16..31}$ at bits $9..24$, bits $30..31 \cup 0..13$, and bits $13..28$. Defining $T = L^{-1}(U)$ eliminates the two shift terms $(T \ll 11)$ and $(T \ll 15)$ inside $\mathrm{ROR}(U,18)$, leaving a single 3-band triangular relationship between $T_{16..31}$ and $v_{0..16}$, which resolves directly into bit 16 ($b_0$), bits $17..18$ ($b_{12}$), and bits $19..31$ ($v \ll 18$). Verified exhaustively across all $2^{16} = 65{,}536$ states with $0$ errors. $\square$
+*Proof.* By `[E27]` and $U_{0..15} = 0$, $v_b = (\sigma_0(U))_b$ for $b \in \{0, \dots, 15\}$ and $v_{16} = (\sigma_0(U))_{16} \oplus U_{16}$. Since $U_{0..15} = 0$, on bits $0..16$ the three terms of $\sigma_0(U) = \mathrm{ROR}(U,7) \oplus \mathrm{ROR}(U,18) \oplus (U \gg 3)$ are:
+- $\mathrm{ROR}(U,7)_b = U_{b+7}$ for $b \in \{9, \dots, 16\}$ and $0$ for $b \in \{0, \dots, 8\}$;
+- $\mathrm{ROR}(U,18)_b = U_{b+18}$ for $b \in \{0, \dots, 13\}$ and $U_{b-14} = 0$ for $b \in \{14, 15, 16\}$;
+- $(U \gg 3)_b = U_{b+3}$ for $b \in \{13, \dots, 16\}$ and $0$ for $b \in \{0, \dots, 12\}$.
+Defining $T = L^{-1}(U)$ so that $U_j = T_j$ for $j \in \{16, \dots, 26\}$, $U_j = T_j \oplus T_{j-11}$ for $j \in \{27, \dots, 30\}$, and $U_{31} = T_{31} \oplus T_{20} \oplus T_{16}$ yields:
+- For $b \in \{1, \dots, 13\}$, $v_b = (\sigma_0(U))_b = T_{b+18}$, giving $T_{19..31} = (v \ll 18) \wedge \mathtt{0xfff80000}$ (in particular, $v_1 = U_{19} = T_{19}$, $v_3 = U_{21}$, $v_4 = U_{22}$, and $v_5 = U_{23}$).
+- For $b \in \{14, 15\}$, $v_{14} = U_{21} \oplus U_{17} = v_3 \oplus T_{17}$ and $v_{15} = U_{22} \oplus U_{18} = v_4 \oplus T_{18}$, isolating $T_{17..18} = ((v \ll 14) \oplus (v \ll 3)) \wedge \mathtt{0x00060000}$.
+- For $b = 16$, $(\sigma_0(U))_{16} = \mathrm{ROR}(U,7)_{16} \oplus \mathrm{ROR}(U,18)_{16} \oplus (U \gg 3)_{16} = U_{23} \oplus U_2 \oplus U_{19} = v_5 \oplus 0 \oplus v_1$. Since $v_{16} = (\sigma_0(U))_{16} \oplus U_{16} = v_5 \oplus v_1 \oplus T_{16}$, we obtain $T_{16} = v_1 \oplus v_5 \oplus v_{16}$, which at bit position 16 is $b_0 = ((v \ll 15) \oplus (v \ll 11) \oplus v) \wedge \mathtt{0x00010000}$.
+Proved algebraically above for all $u \in \mathbb{Z}_{2^{32}}$ and verified empirically on $10^6$ pseudorandom words plus $3 \times 2^{16}$ systematic boundary/carry cases (including $u = \mathtt{0x00400000}$) in `test_all_12_theories.c` (`test_theory_01`) with $0$ mismatches. $\square$
 
-### 6.2 Slot-Sudoku: 6 GB 2-Tier Nested 4-Slot EDF Table & 8 GB / 16 GB / 32 GB Direct Tables (`[E30]`–`[E33]`)
+### 6.2 Slot-Sudoku: 6.00 GiB 2-Tier Nested 4-Slot EDF Table & 8.00 GiB / 16.00 GiB / 32.00 GiB Direct Tables (`[E30]`–`[E33]`)
 
-Because $Q_0(u) = \sigma_0(u) - u$ behaves as a random mapping on $\mathbb{Z}_{2^{32}}$, the preimage multiplicity $|Q_0^{-1}(y)|$ follows a $\text{Poisson}(1)$ distribution ($36.79\%$ of $y$ have $0$ roots, $36.79\%$ have $1$, $18.39\%$ have $2$, $6.13\%$ have $3$, $1.53\%$ have $4$, and $0.37\%$ have $\ge 5$). By Theorem 2, storing only the lower 16 bits $u_{\text{lo}} = u \bmod 2^{16}$ halves the memory footprint of every table tier:
+Over all $2^{32}$ inputs $u \in \mathbb{Z}_{2^{32}}$, the exact, race-free preimage multiplicity histogram of $Q_0(u) = \sigma_0(u) - u \pmod{2^{32}}$ is:
+- $N_0 = 1{,}573{,}363{,}668$ ($36.6327\%$ of $y$ have $0$ roots, vs. $\mathrm{Poisson}(1)$ $e^{-1} = 36.7879\%$),
+- $N_1 = 1{,}586{,}605{,}819$ ($36.9410\%$), $N_2 = 793{,}515{,}119$ ($18.4755\%$), $N_3 = 262{,}185{,}142$ ($6.1045\%$),
+- $N_4 = 64{,}407{,}366$ ($1.4996\%$), $N_5 = 12{,}552{,}261$ ($0.2923\%$), $N_6 = 2{,}022{,}487$ ($0.0471\%$),
+- $N_7 = 277{,}772$ ($0.0065\%$), $N_8 = 33{,}662$ ($0.0008\%$), and $N_{\ge 9} = 4{,}000$ ($0.0001\%$; specifically $N_9 = 3{,}624$, $N_{10} = 336$, $N_{11} = 36$, $N_{12} = 3$, $N_{13} = 0$, $N_{14} = 1$, with tail root weight $\sum_{k=9}^{14} k N_k = 36{,}422$),
+satisfying the exact conservation identities $\sum_{k=0}^{14} N_k = 2^{32} = 4{,}294{,}967{,}296$ and $\sum_{k=0}^{14} k N_k = 2^{32} = 4{,}294{,}967{,}296$.
+To avoid conflating distinct sources of root loss, we separate three effects: (i) **unconstrained $C$-slot capacity** $\sum_{k=0}^{14} \min(k, C) N_k / 2^{32}$, which equals $3{,}856{,}601{,}437 / 2^{32} = 89.7935\%$ for $C=2$ ($72.399\%$ 3-level survival), $4{,}198{,}084{,}127 / 2^{32} = 97.7443\%$ for $C=3$ ($93.384\%$ 3-level), and $4{,}277{,}381{,}675 / 2^{32} = 99.5906\%$ for $C=4$ ($98.777\%$ 3-level); (ii) **`u_lo = 0` empty-slot sentinel exclusion** ($1/65{,}536 \approx 0.0015\%$ of inputs have $u \bmod 2^{16} = 0$, shifting the stored root count by at most $65{,}536$, e.g. to $89.7924\%$ for $C=2$, alongside historical pre-CAS finite-pass table builds that recorded $3{,}856{,}410{,}516 / 2^{32} = 89.7891\%$ for $C=2$ and $4{,}276{,}521{,}180 / 2^{32} = 99.5705\%$ for $C=4$); and (iii) **quad-shared 12-slot sliding/cuckoo eviction** in the compact $6.00\text{ GiB}$ format. By Theorem 2, storing only the lower 16 bits $u_{\text{lo}} = u \bmod 2^{16}$ halves the memory footprint of every table tier:
 
-1. **6.00 GB 2-Tier Nested 4-Slot EDF + Cuckoo-Sudoku Table ([`solve20_padded_fast.c`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c#L542-L989)):**
-   Designed for 16 GB laptops ($3 \times 2^{30}$ entries of `uint16_t` = `6.00 GB`), where every 16 consecutive $y$ values (a **quad** $q = y \gg 4$) share **12 contiguous 16-bit slots**:
+1. **6.00 GiB 2-Tier Nested 4-Slot EDF + Cuckoo-Sudoku Table (`solve20_padded_fast.c`):**
+   Designed for 16 GiB laptops ($3 \times 2^{30}$ entries of `uint16_t` = `6.00 GiB`), where every 16 consecutive $y$ values (a **quad** $q = y \gg 4$) share **12 contiguous 16-bit slots**:
    - **Earliest-Deadline-First (EDF) 3-Slot Sliding Window (`[E30]`):** At Levels 1 and 2, each $y$ probes a 3-slot window within its 12-slot quad at offset:
      $$\text{slide3\_off}(y) = (y \gg 1) + (y \gg 2) - \bigl(\mathrm{ROR}(\mathtt{0x6AAA6AAA}, y \wedge 31) \gg 31\bigr). \tag{E30}$$
    - **Cuckoo-Sudoku Eviction & Nested 4th Slot (`[E31]`):** During construction, a cuckoo-relocation pass (`sudoku_upgrade_worker_6gb` and `tier2_nest4_quad_worker`) packs displaced preimages across each 12-slot quad, placing any 4th root at $\text{b}[(y \wedge 15) \ge 13 \mathrel{?} -1 : 3]$ (probed only when all 3 primary slots are valid roots of $y$). At Level 3, all 12 slots of the quad (`3 × uint64_t`) are tested simultaneously via 64-bit SWAR (`[E35]`):
-     $$\text{6.00 GB Coverage} = \frac{3{,}563{,}795{,}213}{2^{32}} = 82.976\%, \quad \text{3-Level Survival} = (0.82976)^3 = 57.13\%. \tag{E31}$$
-2. **8.00 GB Packed 2-Way `ulo` & 16.00 GB Direct-Indexed GPU VRAM Tables ([`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu)):**
-   Built natively in GPU VRAM in **`3.11 seconds`**, storing up to two 16-bit roots per $y$:
-   $$\text{2-Way Direct Coverage} = 79.64\%, \quad \text{3-Level Survival} = (0.7964)^3 = 50.51\%. \tag{E32}$$
-3. **32.00 GB Direct-Indexed 4-Way Exact CPU Table (`H_exact32[y]`, `--table-gb 32`):**
-   Stores up to four 16-bit roots per $y$ in one `uint64_t`:
-   $$\text{32.00 GB Exact Coverage} = \frac{4{,}276{,}521{,}180}{2^{32}} = 99.5705\%, \quad \text{3-Level Survival} = 98.717\%. \tag{E33}$$
+     $$\text{6.00 GiB Coverage} = \frac{3{,}563{,}795{,}213}{2^{32}} = 82.976\%, \quad \text{3-Level Survival} = (0.82976)^3 = 57.13\%. \tag{E31}$$
+2. **8.00 GiB / 16.00 GiB Direct-Indexed 2-Way GPU VRAM Tables (`solve20_padded_cuda.cu`):**
+   Built natively in GPU VRAM in **`3.11 seconds`**, storing up to two roots per $y$ (unconstrained 2-way capacity $3{,}856{,}601{,}437 / 2^{32} = 89.7935\%$ / 3-level survival $72.399\%$, or $89.7924\%$ with `u_lo = 0` sentinel exclusion):
+   $$\text{2-Way Direct Capacity} = \frac{3{,}856{,}601{,}437}{2^{32}} = 89.7935\%, \quad \text{3-Level Survival} = (0.897935)^3 = 72.399\%. \tag{E32}$$
+3. **32.00 GiB Direct-Indexed 4-Way Exact CPU Table (`H_exact32[y]`, `--table-gb 32`):**
+   Stores up to four 16-bit roots per $y$ in one `uint64_t` (`32.00 GiB` table + `4.00 GiB` count array + `16.00 GiB` optional $F_1$ table = `52.00 GiB` persistent RAM, `68.00 GiB` peak during parallel radix sort), achieving $99.5906\%$ unconstrained 4-way capacity ($98.777\%$ 3-level survival, or $4{,}276{,}521{,}180 / 2^{32} = 99.5705\%$ / $98.717\%$ 3-level in the pre-CAS `u_lo = 0`-excluded build):
+   $$\text{4-Way Direct Capacity} = \frac{4{,}277{,}381{,}675}{2^{32}} = 99.5906\%, \quad \text{3-Level Survival} = (0.995906)^3 = 98.777\%. \tag{E33}$$
 
 ### 6.3 The 3-Level Tree Search, 64-Bit SWAR Level-3 Filter, and Terminal 20-Step Bijection (`[E34]`–`[E37]`)
 
@@ -327,94 +350,103 @@ For each $a_1$ and each Right context in a batch of size $B$:
 - **Level 1 ($a_1 \to W_1 \to a_2$) & Level 2 ($a_2 \to W_2 \to a_3$) with Early Hamming Pruning (`[E34]`):**
   From $a_1$, look up $W_1 \in Q_0^{-1}(T_{16} + F_1(a_1))$, set $a_2 = W_1 + G_1(a_1)$, look up $W_2 \in Q_0^{-1}(T_{17} + G_2(a_1, a_2) - W_1)$, and set $a_3 = W_2 + G_2$. Before computing $e_3, G_3$ or issuing Level-3 DRAM loads, we prune any $a_3$ whose majority mask $M_3 = \neg(a_3 \oplus a_5)$ has Hamming weight exceeding $w_{\text{thresh}} \in \{13, 14\}$:
   $$\mathrm{popcount}\bigl(\neg(a_3 \oplus a_5)\bigr) \le w_{\text{thresh}}, \tag{E34}$$
-  eliminating **$81.8\%$ ($w_{\text{thresh}}=13$) to $71.2\%$ ($w_{\text{thresh}}=14$)** of Level-3 lookups.
-- **Level 3: 64-Bit SWAR Pre-Reconstruction Filter & 19-Step Padded Solution Stream (`[E35]`):**
-  Because the majority condition $((a_4 \oplus a_5) \wedge M_3) = 0$ (`[E13]`) is lower-triangular on bits $0..14$, any candidate $u_{\text{lo}}$ must satisfy $(((u_{\text{lo}} + G_3) \oplus a_5) \wedge M_3 \wedge \mathtt{0x7fff}) = 0$ **before** $u_{\text{hi}}$ is reconstructed. In the 6 GB table, we test 4 slots at a time in a single 64-bit word `w` using SWAR carry-bit detection (`K7 = 0x7fff7fff7fff7fff`, `K8 = 0x8000800080008000`):
+  eliminating **$81.15\%$ ($w_{\text{thresh}}=13$, exact $\mathrm{Binomial}(32, 1/2)$ upper tail $\Pr[\mathrm{Binomial}(32, 1/2) > 13]$) to $70.17\%$ ($w_{\text{thresh}}=14$)** of Level-3 lookups.
+- **Level 3: 64-Bit SWAR Pre-Reconstruction Filter & 19-Step Bridge Candidate Stream (`[E35]`):**
+  Because the majority condition $((a_4 \oplus a_5) \wedge M_3) = 0$ (`[E13]`) is lower-triangular on bits $0..14$, any candidate $u_{\text{lo}}$ must satisfy $(((u_{\text{lo}} + G_3) \oplus a_5) \wedge M_3 \wedge \mathtt{0x7fff}) = 0$ **before** $u_{\text{hi}}$ is reconstructed. In the 6.00 GiB table, we test 4 slots at a time in a single 64-bit word `w` using SWAR carry-bit detection (`K7 = 0x7fff7fff7fff7fff`, `K8 = 0x8000800080008000`):
   $$d = \Bigl(\bigl(((w \wedge K_7) + g_{64}) \oplus A_{64}\bigr) \wedge m_{64}\Bigr) + K_7, \qquad \text{4-slot hit mask} = \neg d \wedge K_8, \tag{E35}$$
-  rejecting $>99\%$ of 12-slot quads in 3 register operations. Every candidate passing the full 32-bit check $((a_4 \oplus a_5) \wedge M_3) = 0$ with $Q_0(W_3) = t_{18}$ is a **complete, verified 19-step padded preimage** (`local_sol19++`).
+  rejecting $>99\%$ of 12-slot quads in 3 register operations. Every candidate passing the full 32-bit check $((a_4 \oplus a_5) \wedge M_3) = 0$ with $Q_0(W_3) = t_{18}$ is a **schedule-consistent 19-step padded bridge candidate** (`sol19`, incremented via `local_sol19++`) satisfying $W_{16}, W_{17}, W_{18}$ for the current right-hand context.
 - **Terminal 20-Step Filter & Exact $\mathbb{F}_2^{32}$ Bijection (`[E36]`–`[E37]`):**
-  For each 19-step padded solution, we recover $W_4$ via `[E7]` and test the step-19 schedule equation:
+  In the 20-step solver (where $a_{13..20}$ are pinned by $H_{20}^*$), for each `sol19` bridge candidate we recover $W_4$ via `[E7]` and test the step-19 schedule equation:
   $$\sigma_0(W_4) + W_3 \equiv T_{19} \pmod{2^{32}}, \qquad T_{19} := W_{19} - \sigma_1(W_{17}) - W_{12}. \tag{E36}$$
   Viewing $\sigma_0(x) = \mathrm{ROR}(x,7) \oplus \mathrm{ROR}(x,18) \oplus (x \gg 3)$ as a $32 \times 32$ matrix over $\mathbb{F}_2$, we have $\det_{\mathbb{F}_2}(\sigma_0) = 1$:
   $$\det_{\mathbb{F}_2}(\sigma_0) = 1 \implies W_4 = \sigma_0^{-1}\bigl((T_{19} - W_3) \bmod 2^{32}\bigr) \text{ is uniquely determined by } W_3 \text{ and } T_{19}. \tag{E37}$$
 
-### 6.4 Carry-Tree Pre-Filtering, L2 Cache-Tile Partitioning, and Octet-Hexadecet Coalescing (`[E42]`–`[E45]`)
+### 6.4 Exact-$T_{16}$ Twin Coalescing, L2 Cache Tiling, and Lower-Triangular Pruning (`[E42]`–`[E45]`)
 
-To remove memory-bandwidth bottlenecks across Levels 1–3 on GPU and Apple Silicon unified memory ([`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu)), we introduce four further algorithmic optimizations (formalized in **Algorithm 2**):
+To maximize memory-system throughput across Levels 1–3 on GPU (`solve20_padded_cuda_prod.cu`, `solve20_padded_cuda.cu`), we combine four techniques (formalized in **Algorithm 2**):
 
-1. **29-Bit Carry-Tree Pre-Filtering (`solve_tree_gpu`, `[E42]`):**
-   Rather than sweeping all $2^{32}$ values of $a_1$ and issuing random DRAM reads at Level 1, we invert the lower-triangular structure of $F_1(a_1)$ directly in registers. For each 16 MB L2 cache tile $[\text{Tile}_{\text{lo}}, \text{Tile}_{\text{hi}})$ of the 8.00 GB 2-way `ulo` table ($K=512$ tiles matching the 24 MB L2 cache of the NVIDIA L4), [`solve_tree_gpu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L2540-L2640) constructs the exact $2^{29}$ subspace of $a_1$ roots mapping into that resident L2 tile:
-   $$a_1 \in F_1^{-1}\bigl([\text{Tile}_{\text{lo}} - T_{16},\; \text{Tile}_{\text{hi}} - T_{16})\bigr) \implies 87.5\% \text{ of } a_1 \text{ space pruned in registers before Level 1}. \tag{E42}$$
-2. **1.0M-Context GPU Reservoir & Fused Octet-Hexadecet $(T_{16}, T_{17})$ Coalescing (`[E43]`):**
-   Sorting the $2^{20}$-context GPU reservoir lexicographically by $(T_{16} \gg 3,\; T_{17} \gg 3)$ forms **Octet-Hexadecet clusters ($M=8$ pairs of $K=16$ contexts = $128$ contexts/sweep)** sharing both the same 32-byte $T_{16}$ cache line and 8-way coalesced $T_{17}$ sectors:
-   $$\Delta(T_{16} \gg 3) = 0 \;\wedge\; \Delta(T_{17} \gg 3) = 0 \quad\text{across } M=8 \text{ context groups} \implies \mathbf{0.125\text{ L2 lookups per context}}. \tag{E43}$$
+1. **L2-Localized Level-1 Bridge Extraction (`extract_l1_bridges_kernel`, `[E42]`):**
+   The NVIDIA L4 GPU features a 48 MiB L2 cache. Because $F_1(a_1) = G_1(a_1) - W_0(a_1)$ includes the 32-bit rotation $\Sigma_1(e_1(a_1))$, $F_1$ is **not** lower-triangular in the 2-adic bit order of $a_1$ (for example, $a_1 = 0 \implies F_1 = \mathtt{0d3fffb7}$ whereas $a_1 = 4 \implies F_1 = \mathtt{3ce015b4}$, which differ in bit 0). Instead of assuming lower-triangularity of $F_1$, `extract_l1_bridges_kernel` partitions $Q_0^{-1}$ global-memory lookups into address tiles $[\text{Tile}_{\text{lo}}, \text{Tile}_{\text{hi}})$ of width $\Delta_{\text{tile}} = \text{Tile}_{\text{hi}} - \text{Tile}_{\text{lo}}$ (at 4 bytes per `uint32_t` entry in the 16.00 GiB 2-Way table, an L2-resident 16–32 MiB tile spans $\Delta_{\text{tile}} = 2^{22}\text{–}2^{23}$ indices across $512\text{–}1024$ tile passes, whereas $\Delta_{\text{tile}} = 2^{29}$ indices spans a 2.00 GiB slice across 8 passes) and tests the target index $t_{16}(a_1) = (T_{16} + F_1(a_1)) \bmod 2^{32}$ in registers before issuing a global memory read:
+   $$(T_{16} + F_1(a_1) - \text{Tile}_{\text{lo}}) \bmod 2^{32} < \Delta_{\text{tile}} \implies \text{under a uniform index model, a fraction } \frac{\Delta_{\text{tile}}}{2^{32}} \text{ issues a global read per tile pass}, \tag{E42}$$
+   converting uncoalesced 16.00 GiB DRAM accesses into localized tile passes across the sweep (without reducing total work summed over all passes).
+2. **Exact 32-Bit $T_{16}$ Twin Coalescing (`twin2`) vs. 4-Way Reservoir Sampling (`single4`, `[E43]`):**
+   Across all $2^{32}$ seeds $a_{12}$, a 20-step target $H_{20}^*$ has an estimated universe of $U \approx 1.68 \times 10^7 \approx 2^{24.00}$ exact $D_{\text{shape}}=0$ right contexts (or $U_{\text{filt}} \approx 1.014 \times 10^7 \approx 2^{23.27}$ if the optional Stage-2 heuristic is enabled). Sorting a reservoir of contexts by $T_{16}$ yields $N_{\text{twins}} \approx U^2 / 2^{33} \approx 32{,}890$ **exact 32-bit $T_{16}$ twin pairs** across $U$ (or $\approx 11{,}970$ pairs in $U_{\text{filt}}$) where $T_{16}^{(2m)} = T_{16}^{(2m+1)}$ (`sweep_exact16_cuda_kernel` in `solve20_padded_cuda_prod.cu` and `solve20_padded_cuda.cu`). Both contexts in each genuine twin pair share the exact same Level-1 lookup $Q_0^{-1}(T_{16} + F_1(a_1))$ (`0.50` Level-1 lookups/context), solving 12 of our 16 padded 20-step targets directly. For the remaining 4 targets (16/16 total), the non-twin 4-way reservoir kernels (`sweep_20_warp_l3_prod_kernel` in `solve20_padded_cuda_prod.cu` and `sweep_exact16_cuda_kernel` in `solve20_padded_cuda.cu`) sample from the reservoir $U$ using 4-way register-prefetched Level-1 batches (achieving $53{,}847.5\text{–}73{,}560.5\text{ sol19/s}$ on the 6.00 GiB table and $132{,}888.7\text{ sol19/s}$ on genuine Exact-$T_{16}$ twin pairs in the 16.00 GiB table on 1× L4 GPU):
+   $$T_{16}^{(2m)} = T_{16}^{(2m+1)} \quad\text{across } M=64 \text{ genuine twin pairs } (B=128) \implies \mathbf{0.50\text{ L1 lookups per context}}. \tag{E43}$$
+   *(Note: whereas 32-bit $T_{16}$ collisions occur naturally in $U \approx 2^{24.0}$, joint 64-bit $(T_{16}, T_{17})$ collisions require a birthday pool of $2^{32} \gg U$ contexts; all witness runs and primary complexity figures in this paper use only genuine, unmutated contexts.)*
 3. **Pre-`ulo2` 16-Bit Lower-Triangular Hamming Pruning (`[E44]`):**
-   In [`sweep_cycle10_integrated_kernel`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L3450-L3560), before reconstructing $W_2$ via `[E29]`, we exploit lower-triangularity of modular addition on bits $0..15$:
-   $$w_{\text{lo},2} := \mathrm{popcount}\Bigl(\neg\bigl(((u_{\text{lo},2} + G_2) \oplus a_5) \wedge \mathtt{0xffff}\bigr)\Bigr) \le w_{\text{lo,thresh}} \in \{7, 11\}, \tag{E44}$$
-   rejecting $65\%\text{–}90\%$ of Level-2 slots in 3 instructions and reaching **$2{,}143{,}080.6\text{ sol19/s}$** on 1× L4 GPU.
+   Before reconstructing the upper 16 bits of $W_2$ via `[E29]`, we exploit lower-triangularity of modular addition on bits $0..15$:
+   $$w_{\text{lo},2} := \mathrm{popcount}\Bigl(\neg\bigl((u_{\text{lo},2} + G_2) \oplus a_5\bigr) \wedge \mathtt{0xffff}\Bigr) \le w_{\text{lo,thresh}} \in \{7, 11\}. \tag{E44}$$
+   For a uniform 16-bit mask, $\mathrm{Binomial}(16, 1/2)$ rejects $39{,}203 / 65{,}536 \approx 59.82\%$ of Level-2 candidates at $w_{\text{lo,thresh}} = 7$ and $2{,}517 / 65{,}536 \approx 3.84\%$ at $w_{\text{lo,thresh}} = 11$ prior to upper-half reconstruction.
 4. **The 4-Round Crossed Carry-Sudoku Spine ($a_2 = a_3 = a_4 = a_5$, `[E45]`):**
-   Crossing the shaping constraint across 4 consecutive rounds by pinning $a_2 = a_3 = a_4 = a_5$ ([`cross_round_4step_sudoku_direct_kernel`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu#L3175-L3285)) collapses all four majority functions to $a_5$ and makes $W_1, W_2, W_3$ $O(1)$ linear functions of $a_1$ with zero $Q_0^{-1}$ table lookups:
-   $$a_2 = a_3 = a_4 = a_5 \implies \begin{cases} \mathrm{Maj}(a_3,a_2,a_1) = \mathrm{Maj}(a_4,a_3,a_2) = \mathrm{Maj}(a_5,a_4,a_3) = \mathrm{Maj}(a_6,a_5,a_4) = a_5, \\ e_4 = a_0 - \Sigma_0(a_5), \quad W_3 = c_{W_3} - \Sigma_1(e_3) - \mathrm{Ch}(e_3, e_2, e_1), \\ \text{5-step } (a_1=a_5): e_3 = a_{-1} - \Sigma_0(a_5) \implies W_3(a_0) = C_3 - (e_2 \wedge \neg e_3). \end{cases} \tag{E45}$$
-   Because $a_2 = a_3 = a_4 = a_5$ spends 96 Left bits, the 3 schedule equations $W_{16}, W_{17}, W_{18}$ become a 96-bit Right filter, preserving the exact $\Theta(2^{32})$ degree-of-freedom conservation law (§9.3).
+   Crossing the shaping constraint across 4 consecutive rounds by pinning $a_2 = a_3 = a_4 = a_5$ (`cross_round_4step_sudoku_direct_kernel` in `solve20_padded_cuda.cu`) collapses all four majority functions to $a_5$ and makes $W_1, W_2, W_3$ direct functions of $a_1$ with zero $Q_0^{-1}$ table lookups:
+   $$a_2 = a_3 = a_4 = a_5 \implies \begin{cases} \mathrm{Maj}(a_3,a_2,a_1) = \mathrm{Maj}(a_4,a_3,a_2) = \mathrm{Maj}(a_5,a_4,a_3) = \mathrm{Maj}(a_6,a_5,a_4) = a_5, \\ e_4 = a_0 - \Sigma_0(a_5), \quad W_3 = c_{W_3} - \Sigma_1(e_3) - \mathrm{Ch}(e_3, e_2, e_1), \\ \text{5-step } (a_1=a_5): e_3 = a_{-1} - \Sigma_0(a_5) \implies W_3(a_0) = C_3 - \mathrm{Ch}(e_3, e_2, e_1). \end{cases} \tag{E45}$$
+   Because $a_2 = a_3 = a_4 = a_5$ spends 96 Left bits, the 3 schedule equations $W_{16}, W_{17}, W_{18}$ become a 96-bit Right filter, illustrating the degree-of-freedom conservation trade-off (§9.2).
 
 ```text
-Algorithm 2: Cache-Tiled Left-Tree & Terminal 20-Step Preimage Solver
-Input: Context cluster C of size B=128 (Octet-Hexadecet coalesced on (T_{16}>>3, T_{17}>>3)), 2-way table H_ulo
-Output: Stream of 19-step padded preimages and matching 20-step padded preimage M*
-1.  for each 16 MB L2 cache tile k in 0..511 do
-2.    Preload tile k of H_ulo into L2 cache; invert Carry-Tree F_1^{-1} to enumerate roots a_1 in tile k  // [E42]
-3.    for each root a_1 and coalesced T_{16} cache line in C do
-4.      Load u_{lo,1} from resident L2 tile; reconstruct W_1 via 5-op closed form [E28]-[E29]; set a_2 = W_1 + G_1
-5.      Compute coalesced T_{17} sector; load u_{lo,2} from H_ulo                                         // [E43]
-6.      if popcount(~(((u_{lo,2} + G_2) ^ a_5) & 0xffff)) <= w_{lo,thresh} then                           // [E44]
-7.        Reconstruct W_2 via [E28]-[E29]; set a_3 = W_2 + G_2 and M_3 = ~(a_3 ^ a_5)
-8.        if popcount(M_3) <= 14 then                                                                     // [E34]
-9.          Load u_{lo,3} from H_ulo[T_{18} + G_3 - W_2]; filter (((u_{lo,3}+G_3)^a_5) & M_3 & 0x7fff)==0 // [E35]
-10.         Reconstruct W_3 via [E28]-[E29]; set a_4 = W_3 + G_3
-11.         if ((a_4 ^ a_5) & M_3) == 0 then                                                              // [E13]
-12.           Emit valid 19-step padded preimage; compute W_4 via [E7]
-13.           if sigma_0(W_4) + W_3 == T_{19} (mod 2^32) then return 20-step padded preimage M*           // [E36]
+Algorithm 2: Left-to-Right Slot-Sudoku Tree & Terminal 20-Step Preimage Solver
+Input: Context batch C of size B=128 (T_{16} twin-coalesced or 4-way batched), 2-way table H_ulo
+Output: Stream of 19-step bridge candidates (sol19) and matching 20-step padded preimage M*
+1.  for each root a_1 in [0, 2^32) and context group in C do
+2.    Compute F_1(a_1) and G_1(a_1); prefetch Level-1 entries from H_ulo[T_{16} + F_1(a_1)]         // [E14], [E43]
+3.    for each valid Level-1 root W_1 do
+4.      Set a_2 = W_1 + G_1(a_1); compute G_2(a_1, a_2); load u_{lo,2} from H_ulo[T_{17} + G_2 - W_1]
+5.      if popcount((~((u_{lo,2} + G_2) ^ a_5)) & 0xffff) <= w_{lo,thresh} then                     // [E44]
+6.        Reconstruct W_2 via [E28]-[E29]; set a_3 = W_2 + G_2 and M_3 = ~(a_3 ^ a_5)
+7.        if popcount(M_3) <= 14 then                                                               // [E34]
+8.          Load u_{lo,3} from H_ulo[T_{18} + G_3 - W_2]; filter (((u_{lo,3}+G_3)^a_5) & M_3 & 0x7fff)==0 // [E35]
+9.          Reconstruct W_3 via [E28]-[E29]; set a_4 = W_3 + G_3
+10.         if ((a_4 ^ a_5) & M_3) == 0 then                                                        // [E13]
+11.           Emit 19-step bridge candidate (sol19); compute W_4 via [E7]
+12.           if sigma_0(W_4) + W_3 == T_{19} (mod 2^32) then return 20-step padded preimage M*     // [E36]
 ```
 
 ### 6.5 Precomputation vs. Online Time, Memory, and SHA-256-Equivalent Complexity
 
-Following standard cryptographic convention [2, 3, 4, 8], Table 6.1 separates **target-independent precomputation** ($Q_0^{-1}$ table construction) from **target-dependent online complexity**, measured both in wall-clock GPU time and in **step-reduced SHA-256 compression equivalents** (`SHA-eq`, benchmarked on the same NVIDIA L4 GPU at $1.5125 \times 10^8\text{ SHA20-eq/s}$).
+Following standard cryptographic convention [2, 3, 4, 8], Table 6.1 separates **target-independent precomputation** ($Q_0^{-1}$ table construction) from **target-dependent online complexity**, reported both in direct wall-clock time (`node-h` denoting wall-clock hours on one 16-thread CPU node) and against our measured same-host **10-core CPU reference baseline** ($1.5125 \times 10^8\text{ SHA20-eq/s}$, measured on arbitrary 20-step message blocks, so $1\text{ node-h} = 2^{38.99}\text{ CPU-ref}$). To avoid conflating CPU work factors with cross-hardware elapsed-time conversions, we report:
+1. **Host-Verifiable CPU Solver (`solve20_padded_fast.c`, 10-core Apple M4, 16 threads):** Generates **$6{,}242.8\text{ sol19/s}$** ($160.2\;\mu\text{s/sol19}$, measured on $a_1$ slice sweeps) on genuine unmutated contexts. Against the same-host CPU reference baseline ($1.5125 \times 10^8\text{ SHA20-eq/s}$), each `sol19` costs $24{,}227.9 \approx 2^{14.56}\text{ CPU-ref}$ evaluations, and an expected 20-step padded preimage ($2^{32}\text{ sol19} = 191.1\text{ node-h}$ on 1 16-thread CPU node, or $23.9\text{ node-h}$ across 8 CPU nodes) costs **$2^{46.56}\text{ CPU-ref}$** evaluations.
+2. **Supplementary GPU Slice Telemetry (`solve20_padded_cuda.cu` / `solve20_padded_cuda_prod.cu`, 1× NVIDIA L4 GPU):** On genuine unmutated contexts, measured $a_1$-slice sweep telemetry (`BENCH_4_IDEAS_RESULTS.txt` and `solve20_padded_cuda.cu`) records **$53{,}847.5\text{ sol19/s}$** (Cycle 0, 6.00 GiB 2-Tier EDF, $B=2$, $22.16\text{ GPU-h}$) to **$73{,}560.5\text{ sol19/s}$** (Cycle 1, 6.00 GiB 2-Tier EDF, $B=8$, $16.22\text{ GPU-h}$ per $2^{32}\text{ sol19}$ on 1× L4), and **$132{,}888.7\text{ sol19/s}$** on genuine Exact-$T_{16}$ twin pairs in the 16.00 GiB Direct 2-Way table (`sweep_exact16_cuda_kernel` in `solve20_padded_cuda_prod.cu` and Cycle 1 of `solve20_padded_cuda.cu`, $8.98\text{ GPU-h}$ on 1× L4, or $1.12\text{ h}$ on 8× L4). *(The experimental `--bench-c2` through `--bench-c10` harnesses [Cycles 2, 4, and 7–10 in `solve20_padded_cuda.cu`, including the $180{,}831.9\text{ sol19/s}$ / $6.60\text{ GPU-h}$ $B=16$ shared-$T_{16}$ run] are architectural microbenchmarks and are excluded from single-target complexity claims; likewise, the $9.62 \times 10^9\text{ evals/s}$ GPU rate in Table 9.4 Row 13 is the specialized 4-round crossed-spine kernel rather than an arbitrary-message 20-step SHA-256 baseline.)*
+3. **Chosen-Target 19-Step Padded Hash (`src/pre19.c`, 1 CPU core):** `src/pre19.c` is a single-threaded C solver using `clock()` with default `m = 29` ($2^{29}$ entries), where the two-pass CSR builder performs $2 \times 2^{29} = 2^{30}$ $Q_0$ evaluations in $16.8\text{–}19.1\text{ s}$ and allocates $4 \times 2^{29}\text{ B} = 2.0\text{ GiB}$ for `table_values` plus $64\text{ MiB}$ for `table_offsets` ($2.0625\text{ GiB}$ persistent RAM). Across our 14 public-label 19-step targets, each solve evaluates $\approx 2^{26.7}\text{–}2^{26.9}$ right-context trials per usable context plus $\approx 1.8 \times 10^6\text{–}1.2 \times 10^8$ ($2^{20.8}\text{–}2^{26.8}$, median $\approx 2^{25.5}$ at $m=29$) left chain starts, with total single-core online search time ranging from **$1.2\text{ s}$ to $86.4\text{ s}$** (median $19.45\text{ s}$, mean $30.2\text{ s}$, corresponding to $2^{32.51}\text{–}2^{32.87}$ 19-step evaluations).
 
-**Table 6.1:** Precomputation and online complexities of the proposed 19- and 20-step preimage attacks.
+**Table 6.1:** Precomputation and online complexities of the proposed 19- and 20-step preimage attacks on genuine contexts.
 
-| Attack & Target Setting | Precomputation Time (`SHA-eq`) | Memory Footprint | Online Context Gen (`SHA-eq`) | Online Tree Search (`SHA-eq` / Preimage) | Wall-Clock Online Time (1× L4 / 8× L4) |
+| Attack & Target Setting | Precomputation Time | Memory Footprint | Online Context Gen | Online Search (`CPU-ref` / `sol19`) | Wall-Clock Online Time |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **19-Step Padded Hash** (55B / 119B) | $2^{32}$ $Q_0$ evals ($3.11\text{ s}$) | $6.0\text{–}8.0\text{ GB}$ | $2^{10.37}$ per ctx ($8.7\;\text{ms}$) | **$2^{6.14}$** ($70.58\text{ SHA19-eq}$) | **$0.47\;\mu\text{s}$** / $0.06\;\mu\text{s}$ |
-| **20-Step Padded Hash** (55B / 119B) | $2^{32}$ $Q_0$ evals ($3.11\text{ s}$) | $8.0\text{–}16.0\text{ GB}$ | $2^{28.75}$ ($9.16\text{ s}$) | **$2^{38.14}$** ($2^{32} \times 70.58\text{ SHA20-eq}$) | **$33.4\text{ min}$** / **$4.18\text{ min}$** |
-| **20-Step Unpadded Compression** (§7) | $3 \times 2^{32}$ evals ($45\text{ s}$) | $48.0\text{ GB}$ RAM | $O(1)$ per $(a_{11}, a_{12})$ | **$2^{36.85}$** ($2^{32}\text{ sol19}$) | $21.1\text{ min}$ (16 CPU cores) |
+| **19-Step Padded Hash** (Chosen $H_{19}^*$, `src/pre19.c`) | $2 \times 2^{29}$ $Q_0$ evals ($16.8\text{–}19.1\text{ s}$, 1 core) | $2.0625\text{ GiB}$ (`m=29` CSR) | $\approx 2^{26.7\text{–}26.9}$ trials/ctx ($D \le 3$) | **$2^{20.8\text{–}26.8}$ chains ($2^{32.51\text{–}32.87}$ evals)** | **`1.2–86.4 s` (median `19.45 s`, 1 CPU core)** |
+| **19-Step Bridge Stream (`sol19`)** (`solve20_padded_fast.c`) | $2^{32}$ $Q_0$ evals ($3.11\text{ s}$, 16 threads) | $6.00\text{ GiB}$ (CPU) / $6\text{–}16\text{ GiB}$ (GPU) | $266.8\text{ ctx/s}$ (CPU) | **$24{,}228$ ($2^{14.56}$) `CPU-ref` / `sol19`** | **`160.2 µs/sol19` (CPU)**; *supp. GPU:* `7.5–18.6 µs` |
+| **20-Step Padded Hash** (Chosen $H_{20}^*$, 55B / 119B) | $2^{32}$ $Q_0$ evals ($3.11\text{ s}$, 16 threads) | $6.00\text{ GiB}$ (CPU) / $6\text{–}16\text{ GiB}$ (GPU) | $266.8\text{ ctx/s}$ (CPU) | **$2^{46.56}\text{ CPU-ref}$** ($2^{32}\text{ sol19}$ on CPU) | **`191.1 node-h` (1× CPU)**; *supp. GPU:* **`8.98–22.16 h` (1× L4)** |
+| **20-Step Unpadded Compression** (§7, `solve20_zero_a3.c`) | $3 \times 2^{32}$ evals ($45\text{ s}$, 16 threads) | $48.00\text{ GiB}$ RAM | $O(1)$ per $(a_{11}, a_{12})$ | **$2^{38.13}\text{ CPU-ref}$** expected ($2^{32}\text{ sol19}$) | **$33.14\text{ min}$ exp. / `21.10 min` obs.** (16 CPU cores) |
 
 ---
 
 ## 7. Companion Result: 20-Step Unpadded Compression Preimages via the Zero-$a_3$ Bridge
 
-When FIPS 180-4 padding is not required (the 20-step compression-function model studied in [6, 7, 9]), we can eliminate the $(3/4)^{32} \approx 2^{-13.28}$ majority survival loss of `[E13]` altogether by placing the state on the **Zero-$a_3$ Manifold** ([`solve20_zero_a3.c`](file:///Users/srw/Code/sha-check-eprint/solve20_zero_a3.c)):
-$$a_3 = 0, \qquad a_5 = 0, \qquad a_6 = 0, \qquad a_8 = 0, \qquad a_9 = 0, \qquad a_{10} = \mathtt{0xffffffff}. \tag{E38}$$
+When FIPS 180-4 padding is not required (the 20-step compression-function model studied in [6, 7, 9]), we can eliminate the $(3/4)^{32} \approx 2^{-13.28}$ ($13.28$-bit) majority survival loss of `[E13]` altogether by placing the state on the **Zero-$a_3$ Manifold** (`solve20_zero_a3.c`), where the middle state words are pinned to:
+$$a_3 = 0, \quad a_5 = 0, \quad a_6 = 0, \quad a_8 = 0, \quad a_9 = 0, \quad a_{10} = \mathtt{0xffffffff} \implies e_9 = 0, \quad e_{10} = \mathtt{0xffffffff}. \tag{E38}$$
 Because $\mathrm{Maj}(0, x, 0) = 0$, both majority functions containing $a_4$ vanish identically for **$100\%$ of $a_4 \in [0, 2^{32})$**:
 $$\mathrm{Maj}(a_5, a_4, a_3) = \mathrm{Maj}(0, a_4, 0) = 0, \qquad \mathrm{Maj}(a_6, a_5, a_4) = \mathrm{Maj}(0, 0, a_4) = 0. \tag{E39}$$
-Fixing $a_3 = 0$ removes one degree of freedom on the Left, which we restore on the Right by leaving $a_7$ free and solving the step-16 schedule equation via the companion operator $Q_1(u) = \sigma_1(u) + u$:
-$$Q_0(W_1) = F_{\text{left}}(a_1) + R_{16}(a_7, a_{11}, a_{12}), \qquad Q_1(\Delta_{14}) = \text{Target}_{Q_1}(a_1, a_{11}, a_{12}). \tag{E40}$$
-Precomputing 16 GB tables for $Q_0^{-1}$, $Q_1^{-1}$, and the Left bridge $(a_1, W_1, W_2)$ satisfying $a_3 = 0$ (48 GB total, $100\%$ independent of $H^*$), [`solve20_zero_a3.c`](file:///Users/srw/Code/sha-check-eprint/solve20_zero_a3.c) achieves **zero $\beta$-filter loss** ($63.37\%$ survival per bridge hit) and **2.16 million exact 19-step compression solutions per second** on a 16-vCPU CPU node:
-$$\text{Total 20-Step Unpadded Compression Solve Time} = 1{,}266.26\text{ s } (21.1\text{ minutes on 16 CPU cores}). \tag{E41}$$
+Fixing $a_3 = 0$ removes one degree of freedom on the Left, which we restore on the Right by leaving $a_7$ free. Under `[E38]`, $e_6 = a_2$ and $\mathrm{Ch}(e_9, e_8, e_7) = \mathrm{Ch}(0, e_8, e_7) = e_7 = a_7$, so $W_9 = W_{9,0} - a_2 - a_7$ (where $W_{9,0} := \left.W_9\right|_{a_2=a_7=0}$). Simultaneously, on the Left $a_2 = W_1 + G_1(a_1)$ (with $G_1(a_1) := -\left.W_1\right|_{a_2=0}$), and on the Right $W_{14} = D_{14}(a_{11}, a_{12}) - a_7$ (where $D_{14}(a_{11}, a_{12}) := \left.W_{14}\right|_{a_7=0}$). Substituting $-a_2 = -W_1 - G_1(a_1)$ and $-a_7 = W_{14} - D_{14}(a_{11}, a_{12})$ into the step-16 schedule equation $W_{16} = \sigma_1(W_{14}) + W_9 + \sigma_0(W_1) + W_0(a_1)$ groups the $W_1$ terms into $\sigma_0(W_1) - W_1 = Q_0(W_1)$ and the $W_{14}$ terms into $\sigma_1(W_{14}) + W_{14} = Q_1(W_{14})$. Introducing a fixed meeting constant $T_{16}^* = \mathtt{0x12345678}$ decouples step 16 into independent Left ($Q_0$) and Right ($Q_1$) table lookups (`phase1_left_worker` and `phase2_right_worker` in `solve20_zero_a3.c`):
+$$\begin{aligned}
+Q_0(W_1) &= T_{16}^* - W_0(a_1) + G_1(a_1), & L_{17}(a_1) &:= \sigma_0(W_2) + W_1, \\
+Q_1(W_{14}) &= W_{16}(a_{11}, a_{12}) + D_{14}(a_{11}, a_{12}) - W_{9,0} - T_{16}^*, & a_7 &= D_{14}(a_{11}, a_{12}) - W_{14}.
+\end{aligned} \tag{E40}$$
+Precomputing 16 GiB tables for $Q_0^{-1}$, $Q_1^{-1}$, and the Left bridge $L_{17}(a_1) \mapsto a_1$ satisfying $a_3 = 0$ ($48.0\text{ GiB}$ total, $45\text{ s}$ one-time build, $100\%$ independent of $H^*$), `solve20_zero_a3.c` achieves **zero $\beta$-filter loss** ($63.37\%$ survival per bridge hit) and **2.16 million exact 19-step compression solutions per second** (`0.46 µs/sol19`) on a 16-vCPU CPU node. At $2.16 \times 10^6\text{ sol19/s}$, the expected online search time for $2^{32}$ 19-step solutions is $1{,}988.4\text{ s} \approx 33.14\text{ minutes}$ ($\approx 2^{38.13}$ scalar CPU `SHA20-eq` at $151.25\text{ M evals/s}$, specifically $2^{38.1298}$). For the target `deadbeef...`, the solver found a 20-step unpadded preimage after $2^{32.01}$ outer $(a_{11}, a_{12})$ trials ($2.735 \times 10^9 \approx 2^{31.35}$ 19-step solutions):
+$$\text{Expected 20-Step Unpadded Online Time} = 1{,}988.4\text{ s } (33.14\text{ min}); \quad \text{Observed Run} = 1{,}266.26\text{ s } (21.10\text{ min, 16 CPU cores}). \tag{E41}$$
 
 ---
 
 ## 8. Verified 19-Step and 20-Step Padded SHA-256 Preimage Witnesses
 
-All 29 20-step witnesses and 19-step witnesses below (covering 20-step single-block padded, 20-step two-block chosen-ASCII-prefix padded, 19-step single-block and two-block padded, and 20-step unpadded compression) are independently verified in under 1 second by running `python3 verify_all_witnesses.py` ([`verify_all_witnesses.py`](file:///Users/srw/Code/sha-check-eprint/verify_all_witnesses.py)). Complete machine-readable witness files are provided in [`demos_20step.txt`](file:///Users/srw/Code/sha-check-eprint/demos_20step.txt), [`examples_abc_hello_20step.txt`](file:///Users/srw/Code/sha-check-eprint/examples_abc_hello_20step.txt), [`witnesses_20step.txt`](file:///Users/srw/Code/sha-check-eprint/witnesses_20step.txt), and [`FOUND_20ROUND_PREIMAGE.txt`](file:///Users/srw/Code/sha-check-eprint/FOUND_20ROUND_PREIMAGE.txt).
+All **46 distinct** 20-step and 19-step witnesses below (verified via 48 checks in `verify_all_witnesses.py`, where `"abc"` appears in both the flagship demonstration §8.2 and the 14-label benchmark suite §8.4: comprising 16 distinct 20-step padded witnesses, 16 distinct 19-step padded witnesses, 13 distinct 20-step unpadded compression witnesses, and 1 Stage-2 completeness regression witness) are independently verified in under 1 second by running `python3 verify_all_witnesses.py` (`verify_all_witnesses.py`). Complete machine-readable witness files are provided in `demos_20step.txt`, `examples_abc_hello_20step.txt`, `witnesses_20step.txt`, and `FOUND_20ROUND_PREIMAGE.txt` (in display blocks below and in §1.1, 110-hex-character 55-byte messages are wrapped across two 55-character lines for readability, while Tables 8.2 and 8.3 print single-line 110-character hex strings).
 
 ### 8.1 Witness 1: First Demonstrated 20-Step Padded SHA-256 Preimage ($H_{20}^* = \mathtt{0000\dots0000}$)
 
-Found by [`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu) on Sweep 62 (`ctx=5`, after $70{,}661{,}112$ exact 19-step padded solutions; recorded in [`FOUND_20ROUND_PREIMAGE.txt`](file:///Users/srw/Code/sha-check-eprint/FOUND_20ROUND_PREIMAGE.txt)):
+Found by `solve20_padded_cuda.cu` on Sweep 62 (`ctx=5`, after $70{,}661{,}112$ exact 19-step bridge candidates; recorded in `FOUND_20ROUND_PREIMAGE.txt`):
 
 - **Target 20-Step Digest ($H_{20}^*$):**
   `0000000000000000000000000000000000000000000000000000000000000000`
-- **55-Byte Message $M$ (440 bits, big-endian hex):**
-  `ec531306c85ad4a4ad211d2e1a03ece4d0ad4a0e6b4c2b9436b3babdcbd520597196f52c042b8cd95f1a39f71b58b47b0647c78e65416f`
+- **55-Byte Message $M$ (440 bits, big-endian hex, split into two 55-hex-char lines):**
+  `ec531306c85ad4a4ad211d2e1a03ece4d0ad4a0e6b4c2b9436b3bab`
+  `dcbd520597196f52c042b8cd95f1a39f71b58b47b0647c78e65416f`
 - **FIPS 180-4 Padded 512-Bit Message Block ($W_0 \dots W_{15}$):**
   ```text
   W[ 0.. 3] = ec531306  c85ad4a4  ad211d2e  1a03ece4
@@ -430,7 +462,7 @@ Found by [`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solv
 | :---: | :---: | :---: | :---: | :--- |
 | $1$ | `e85b9b53` | `851af5a8` | $W_0 = \mathtt{ec531306}$ | Swept root $a_1 \in [0, 2^{32})$ |
 | $2$ | `47d401c6` | `4b125b48` | $W_1 = \mathtt{c85ad4a4}$ | Level-1 $Q_0^{-1}$ hit: $Q_0(W_1) = T_{16} + F_1(a_1)$ |
-| $3$ | `0a280ce0` | `8b761050` | $W_2 = \mathtt{ad211d2e}$ | Level-2 $Q_0^{-1}$ hit; $\mathrm{popcount}(M_3) = 10 \le 14$ |
+| $3$ | `0a280ce0` | `8b761050` | $W_2 = \mathtt{ad211d2e}$ | Level-2 $Q_0^{-1}$ hit; $\mathrm{popcount}(M_3) = 12 \le 14$ |
 | $4$ | `67298bc8` | `c121961d` | $W_3 = \mathtt{1a03ece4}$ | Level-3 $Q_0^{-1}$ hit; $((a_4 \oplus a_5) \wedge M_3) = 0$ (`[E13]`) |
 | **$5$** | **`67978bcd`** | `2724a33e` | $W_4 = \mathtt{d0ad4a0e}$ | **Exact Shaping (`[E11]`):** $a_5 = a_6 = \mathtt{67978bcd}$ ($D=0$) |
 | **$6$** | **`67978bcd`** | `eea015fa` | $W_5 = \mathtt{6b4c2b94}$ | **Exact Shaping (`[E11]`):** $a_6 = a_5 = \mathtt{67978bcd}$ ($D=0$) |
@@ -444,42 +476,59 @@ Found by [`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solv
 | $14$ | `b4322266` | `da868879` | $W_{13} = \mathtt{65416f80}$ | **Padding byte (`[E21]`):** $W_{13} \bmod 256 = \mathtt{0x80}$ |
 | **$15$** | `8493b564` | **`ffffffff`** | $W_{14} = \mathtt{00000000}$ | **$\mathrm{Ch}$-Annihilation (`[E22]`):** $e_{15} = \mathtt{0xffffffff}$, $W_{14}=0$ |
 | $16$ | `97457a44` | `03b1406f` | $W_{15} = \mathtt{000001b8}$ | **Padding length (`[E1]`):** $W_{15} = 440$ bits (`0x1b8`) |
-| $17..20$ | `5ab00ac6`..`95f61999` | `a41f32e7`..`aef1ad81` | $W_{16..19} = \mathtt{d6317d0a}$..$\mathtt{cd1c5aee}$ | Terminal hit $\sigma_0(W_4)+W_3 = T_{19} \implies H_{20} = \mathtt{00..00}$ |
+| $17$ | `5ab00ac6` | `a41f32e7` | $W_{16} = \mathtt{d6317d0a}$ | Level-1 schedule word $W_{16}$; fixed by $H_{20}^* - \mathrm{IV}$ |
+| $18$ | `c3910c8e` | `e07c2655` | $W_{17} = \mathtt{3815d972}$ | Level-2 schedule word $W_{17}$; fixed by $H_{20}^* - \mathrm{IV}$ |
+| $19$ | `4498517b` | `64fa9774` | $W_{18} = \mathtt{89d90bef}$ | Level-3 schedule word $W_{18}$; 19-step bridge complete |
+| $20$ | `95f61999` | `aef1ad81` | $W_{19} = \mathtt{cd1c5aee}$ | Terminal hit $\sigma_0(W_4)+W_3 = T_{19} \implies H_{20} = \mathtt{00..00}$ |
 
-### 8.2 Witness 2: Flagship 20-Step & 19-Step Single-Block Padded Preimages for FIPS 180-4 Test Vector $\text{SHA-256}(\text{``abc''})$ and $\text{SHA-256}(\text{``hello''})$
+### 8.2 Witness 2: Flagship 20-Step & 19-Step Single-Block Padded Preimages for $H^* = \mathtt{0000\dots0000}$, $\text{SHA-256}(\text{“abc”})$, and $\text{SHA-256}(\text{“hello”})$
 
-Recorded in [`demos_20step.txt`](file:///Users/srw/Code/sha-check-eprint/demos_20step.txt) and [`examples_abc_hello_20step.txt`](file:///Users/srw/Code/sha-check-eprint/examples_abc_hello_20step.txt):
+Recorded in `demos_20step.txt`, `examples_abc_hello_20step.txt`, and `verify_all_witnesses.py` (55-byte hex strings split into two 55-hex-char lines):
 
-- **Target Digest $\text{SHA-256}(\text{``abc''})$ (FIPS 180-4 §B.1 [1]):**
+- **Target Digest $H_{19}^* = \mathtt{0000\dots0000}$ (All-Zero 256-Bit Digest, 19-Step Padded with Exact $a_5 = a_6$):**
+  `0000000000000000000000000000000000000000000000000000000000000000`
+  - **19-Step Padded 55-Byte Preimage ($H_{19}(M) = \mathtt{0000\dots0000}$):**
+    `fc0c9d8eafb2fa329af316940c42a5eb9773cec39e4f7e396182628`
+    `7ae767638f92d4ce5fc5eb8cabd7606409364dda27a6c1bb5220246`
+    ```text
+    W[ 0.. 7] = fc0c9d8e afb2fa32 9af31694 0c42a5eb 9773cec3 9e4f7e39 61826287 ae767638
+    W[ 8..15] = f92d4ce5 fc5eb8ca bd760640 9364dda2 7a6c1bb5 22024680 00000000 000001b8
+    ```
+    *(Invariants verified: $a_5 = a_6 = \mathtt{3dbb85b8}$ [$D = 0$], $e_9 = e_{10} = \mathtt{0xffffffff}$, $W_{13} \bmod 256 = \mathtt{0x80}$, $W_{14} = 0$, $W_{15} = 440$.)*
+- **Target Digest $\text{SHA-256}(\text{“abc”})$ (FIPS 180-4 §B.1 [1]):**
   `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`
-  - **20-Step Padded 55-Byte Preimage ($H_{20}(M) = \text{SHA-256}(\text{``abc''})$):**
-    `edf6e70a7001ae71b900f18119aaa1fdf6c1179b4268891262a9539be04d41236685e0c102e0ad23165e8b7157669819302ddcb3c68226`
+  - **20-Step Padded 55-Byte Preimage ($H_{20}(M) = \text{SHA-256}(\text{“abc”})$):**
+    `edf6e70a7001ae71b900f18119aaa1fdf6c1179b4268891262a9539`
+    `be04d41236685e0c102e0ad23165e8b7157669819302ddcb3c68226`
     ```text
     W[ 0.. 7] = edf6e70a 7001ae71 b900f181 19aaa1fd f6c1179b 42688912 62a9539b e04d4123
     W[ 8..15] = 6685e0c1 02e0ad23 165e8b71 57669819 302ddcb3 c6822680 00000000 000001b8
     ```
     *(Invariants verified: $a_5 = a_6 = \mathtt{4ade1afa}$, $a_{10} = a_{11} = \mathtt{acf3c908}$, $e_9 = e_{10} = e_{15} = \mathtt{0xffffffff}$.)*
-  - **19-Step Padded 55-Byte Preimage ($H_{19}(M) = \text{SHA-256}(\text{``abc''})$):**
-    `8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a`
-- **Target Digest $\text{SHA-256}(\text{``hello''})$:**
+  - **19-Step Padded 55-Byte Preimage ($H_{19}(M) = \text{SHA-256}(\text{“abc”})$):**
+    `8ca254f8d04dd3fb04efaad6b1867588ffe833de49a144fedbf1839`
+    `422892dc9f5a9158d8fc063290a14a9a6c55dfa245642a0247ec45a`
+- **Target Digest $\text{SHA-256}(\text{“hello”})$:**
   `2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824`
-  - **20-Step Padded 55-Byte Preimage ($H_{20}(M) = \text{SHA-256}(\text{``hello''})$):**
-    `3a11bd11262fcee01e4a184372643bdbe4ba65651b730b0b8fe49c7648866d52c60847db2400ef72c859e2b0366e470fae3cf0891313b4`
-  - **19-Step Padded 55-Byte Preimage ($H_{19}(M) = \text{SHA-256}(\text{``hello''})$):**
-    `ac055aaa83e1e51a5d74102b7739b7b6e019e31100cd525baf09c642d4b59b8fc4eb8d481df111aee2616325b336b827190103c33584c5`
+  - **20-Step Padded 55-Byte Preimage ($H_{20}(M) = \text{SHA-256}(\text{“hello”})$):**
+    `3a11bd11262fcee01e4a184372643bdbe4ba65651b730b0b8fe49c7`
+    `648866d52c60847db2400ef72c859e2b0366e470fae3cf0891313b4`
+  - **19-Step Padded 55-Byte Preimage ($H_{19}(M) = \text{SHA-256}(\text{“hello”})$):**
+    `ac055aaa83e1e51a5d74102b7739b7b6e019e31100cd525baf09c64`
+    `2d4b59b8fc4eb8d481df111aee2616325b336b827190103c33584c5`
 
-### 8.3 Witness 3: Flagship 20-Step & 19-Step Two-Block (119-Byte, Plain-ASCII First Block) Padded Preimages ($H^* = \text{SHA-256}(\text{``''})$)
+### 8.3 Witness 3: Flagship 20-Step & 19-Step Two-Block (119-Byte, Plain-ASCII First Block) Padded Preimages ($H^* = \text{SHA-256}(\text{“”})$)
 
-Demonstrating full Merkle–Damgård multi-block chaining with an arbitrary human-readable 64-byte plain-ASCII first block (`"This first block is plain text; the second one was computed....."`) followed by a 55-byte computed second block with FIPS 180-4 padding [1] ($W_{13}^{(2)} \bmod 256 = \mathtt{0x80}$, $W_{14}^{(2)} = 0$, $W_{15}^{(2)} = \mathtt{0x000003b8} = 952\text{ bits}$, recorded in [`demos_20step.txt`](file:///Users/srw/Code/sha-check-eprint/demos_20step.txt)):
+Demonstrating full Merkle–Damgård multi-block chaining with an arbitrary human-readable 64-byte plain-ASCII first block (`"This first block is plain text; the second one was computed....."`) followed by a 55-byte computed second block with FIPS 180-4 padding [1] ($W_{13}^{(2)} \bmod 256 = \mathtt{0x80}$, $W_{14}^{(2)} = 0$, $W_{15}^{(2)} = \mathtt{0x000003b8} = 952\text{ bits}$, recorded in `demos_20step.txt`):
 
-- **Target Digest ($H^* = \text{SHA-256}(\text{``''})$):**
+- **Target Digest ($H^* = \text{SHA-256}(\text{“”})$):**
   `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
 - **Block 1 (64 Bytes Plain ASCII, identical for both 20-step and 19-step demos):** `"This first block is plain text; the second one was computed....."`
   ```text
   W^(1)[ 0.. 7] = 54686973 20666972 73742062 6c6f636b 20697320 706c6169 6e207465 78743b20
   W^(1)[ 8..15] = 74686520 7365636f 6e64206f 6e652077 61732063 6f6d7075 7465642e 2e2e2e2e
   ```
-- **20-Step Block 2 (55 Computed Bytes + 9-Byte FIPS 180-4 Padding, $L = 952\text{ bits} = \mathtt{0x3b8}$, chaining from $H_{20}^{(1)} = \mathtt{9743298d\dots 6f586f80}$):**
+- **20-Step Block 2 (55 Computed Bytes + 9-Byte FIPS 180-4 Padding, $L = 952\text{ bits} = \mathtt{0x3b8}$, chaining from $H_{20}^{(1)} = \mathtt{9743298d4cdedcbb11eab6931270fe130dd0420fff6255433a223586f586f980}$):**
   ```text
   W_20^(2)[ 0.. 7] = df28e21b b6b61202 ba87baa7 2096ee0a 3ac325cf 1f12056e 7cfe2ae1 735b4d10
   W_20^(2)[ 8..15] = 6b8f6e0b 22eb9b50 4ed93689 91944b0a 115a934f 17c2c480 00000000 000003b8
@@ -513,7 +562,7 @@ Matching every public-label target in the benchmark suite ($H^* = \text{SHA-256}
 | `"padded test 11"` | `7b66f998c1c60bdd65744e43b69190481502cee718245876fc2c535f4b7cf5a8` | `95ae4eac83a9011e5566e562f14507b0dd53f8f6391a4b89718a66d9ee5a9b02366e31a8e7345cf14b70b5d82600456857a68161b2ee3b` | `OK` |
 | `"hand-off cross-check 2026-09-29"` | `d374822f21eb0d4dbc809ae0443c2c6c66f8ce5d07c8779bcc5fc7849f44e3c2` | `700821b0948103e6e0ee472f6e7fac2a44139bc265ad13f422dc966e00e3c17e1f472e92b1769a7b9199a2a704fa97c927e01939f97333` | `OK` |
 
-**Table 8.3:** Complete 19-step single-block FIPS 180-4 padded benchmark suite (all 14 public-label targets, full 55-byte `message_hex`, $L=440$ bits).
+**Table 8.3:** Complete 19-step single-block FIPS 180-4 padded benchmark suite (all 14 public-label targets, full 55-byte `message_hex`, $L=440$ bits, generated by our soft-shaping 19-step padded solver `src/pre19.c` with $D = \mathrm{popcount}(a_5 \oplus a_6) \le 3$ and $e_9 = e_{10} = \mathtt{0xffffffff}$).
 
 | Target Label (`H* = SHA-256(label)`) | Complete 19-Step Padded 55-Byte Preimage `message_hex` (110 hex chars; pad suffix `8000000000000001b8`) | Verified |
 | :--- | :--- | :---: |
@@ -532,7 +581,7 @@ Matching every public-label target in the benchmark suite ($H^* = \text{SHA-256}
 | `"padded test 11"` | `23ae3771d98d69c6925d4ca4b8059f84404eea570db3d014c022af5649565a9a19a0e610fdb9258ce144893cee5d25f260f11614b36253` | `OK` |
 | `"hand-off cross-check 2026-09-29"` | `6e77d54453883692c4e2fbf20d290ce36ee98f42748f7c618cd07a0d19b36b5a43c25fa3b008d57af11dbc2dabc843dae6117a0f867286` | `OK` |
 
-- **Demonstrated 20-Step Unpadded Compression Preimage (`deadbeef...`, Zero-$a_3$ Bridge [`solve20_zero_a3.c`](file:///Users/srw/Code/sha-check-eprint/solve20_zero_a3.c), plus all 12 `[comp]` targets `"unpadded test 1"`..`"unpadded test 11"` and `"hand-off cross-check 2026-09-29"` in [`witnesses_20step.txt`](file:///Users/srw/Code/sha-check-eprint/witnesses_20step.txt)):**
+- **Demonstrated 20-Step Unpadded Compression Preimage (`deadbeef...`, Zero-$a_3$ Bridge `solve20_zero_a3.c`, plus all 12 `[comp]` targets `"unpadded test 1"`..`"unpadded test 11"` and `"hand-off cross-check 2026-09-29"` in `witnesses_20step.txt`):**
   ```text
   W[ 0.. 7] = 4334d956 6eccece1 6727a1b2 d85811af 890c5399 79018a3b d346b94d 5f26009b
   W[ 8..15] = 7562d311 0bfd80d5 1f8c38f4 16d8315d e0353aa2 6adf4bd2 a2bf14a2 801ae8f7
@@ -542,73 +591,73 @@ Matching every public-label target in the benchmark suite ($H^* = \text{SHA-256}
 
 ## 9. Experimental Ablation, Scope, and Structural Complexity Bounds
 
-### 9.1 Algorithmic Ablation Across CPU (Apple M3) and GPU (NVIDIA L4)
+### 9.1 Algorithmic Ablation Across CPU and GPU
 
-Table 9.1 summarizes the algorithmic ablation of our solver from soft-shaped CSR tables to the full Carry-Sudoku / Slot-Sudoku architecture (see Table 1.1 in §1.1 for the comparison against prior reduced-step SHA-256 preimage attacks).
+Table 9.1 summarizes the algorithmic ablation of our solver on genuine, unmutated right-hand contexts from soft-shaped CSR tables to the full Carry-Sudoku / Slot-Sudoku architecture (see Table 1.1 in §1.1 for the comparison against prior reduced-step SHA-256 preimage attacks). For CPU configurations, we report `CPU-ref` per `sol19` against our measured same-host 10-core scalar CPU reference baseline ($1.5125 \times 10^8\text{ SHA20-eq/s}$ on arbitrary 20-step message blocks). Supplementary GPU telemetry on 1× NVIDIA L4 (`solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu`) is reported in direct GPU wall-clock time on genuine contexts.
 
-**Table 9.1:** Algorithmic ablation of 19-step and 20-step padded preimage throughput and SHA-256-equivalent cost.
+**Table 9.1:** Algorithmic ablation of 19-step bridge candidate (`sol19`) and 20-step padded preimage throughput on genuine unmutated contexts.
 
-| Algorithmic Configuration | $Q_0^{-1}$ Table & Memory | Right-Context Rate ($D=0$) | 19-Step Padded Rate (`sol19/s`) | `SHA20-eq` per `sol19` | Expected 20-Step Time (1× Device) | Expected Time (**8× L4 GPUs**) |
+| Algorithmic Configuration | $Q_0^{-1}$ Table & Memory | Right-Context Rate ($D=0$) | 19-Step Bridge Rate (`sol19/s`) | `CPU-ref` Evals per `sol19` | Expected 20-Step Time (1× Device) | Expected Time (8× Devices) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Baseline Soft Shaping** (`src/pre19.c`, 12 M3 threads) | 2.0 GB CSR ($2^{29}$ slots, $D \le 3$) | Soft ($D \le 3$) | $\sim 200\text{ sol19/s}$ | $\sim 120{,}000$ | $\sim 7.6\text{ days}$ | — |
-| **Exact Shaping + Slot-Sudoku CPU** ([`solve20_padded_fast.c`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c)) | 6.0 GB 2-Tier 4-Slot EDF (`[E30]`–`[E31]`) | $9.1\text{ ctx/s}$ ($86.4\text{B/s}$) | $6{,}242.8\text{ sol19/s}$ | $11{,}400$ | $11.9\text{ hours}$ | — |
-| **Slot-Sudoku + 5-Op $\mathbb{F}_2$ Inverse GPU** (`[E29]`, 1× L4) | 6.0 GB 2-Tier EDF ($B=8$ sector) | $7{,}580\text{ ctx/s}$ | $73{,}560.5\text{ sol19/s}$ | $6{,}950$ | $16.22\text{ hours}$ | $2.03\text{ hours}$ |
-| **Direct 2-Way + Warp L3 GPU** (`[E32]`, 1× L4) | 16.0 GB Direct 2-Way ($16$-way $T_{16}$) | $29{,}310\text{ ctx/s}$ | $180{,}831.9\text{ sol19/s}$ | $2{,}828$ | $6.60\text{ hours}$ | $49.5\text{ min}$ |
-| **29-Bit Carry-Tree + L2 Tiling** (`[E42]`, 1× L4) | 8.0 GB 2-Way `ulo` ($K=512$ L2 tiles) | $29{,}310\text{ ctx/s}$ | $759{,}664.5\text{ sol19/s}$ | $673.2$ | $1.57\text{ hours}$ | $11.8\text{ min}$ |
-| **Octet-Hexadecet + Pre-`ulo2` Pruning** (`[E43]`–`[E44]`, 1× L4) | **8.0 GB `ulo` ($0.125\text{ L2/ctx}$)** | **$114{,}507\text{ ctx/s}$** | **$2{,}143{,}080.6\text{ sol19/s}$** | **$70.58$** ($2^{6.14}$) | **$33.4\text{ min}$** ($2^{38.14}\text{ SHA20-eq}$) | **$4.18\text{ min}$** |
+| **Chosen-Target 19-Step Soft Shaping** (`src/pre19.c`, 1 core) | 2.0625 GiB CSR ($2^{29}$ entries, $D \le 3$) | Soft ($\approx 2^{26.7\text{–}26.9}$ trials/ctx) | Chosen $H_{19}^*$ search | — ($2^{20.8\text{–}26.8}$ chains; $2^{32.51\text{–}32.87}$ evals) | **`1.2–86.4 s` (19-step, med. `19.45 s`)** | — |
+| **Exact Shaping + Slot-Sudoku CPU** (`solve20_padded_fast.c`, 16 threads) | 6.00 GiB 2-Tier 4-Slot EDF (`[E30]`–`[E31]`) | $266.8\text{ ctx/s}$ | **$6{,}242.8\text{ sol19/s}$** | **$24{,}228$ ($2^{14.56}$)** | **`191.1 node-h`** ($2^{46.56}\text{ CPU-ref}$) | **`23.9 node-h`** (8× CPU) |
+| **Slot-Sudoku + 5-Step $\mathbb{F}_2$ Inverse GPU** (*supp.*, `[E29]`, 1× L4) | 6.00 GiB 2-Tier EDF ($B=8$ sector) | $7{,}580\text{ ctx/s}$ | $53{,}847.5\text{–}73{,}560.5\text{ sol19/s}$ | — (GPU slice telemetry) | $16.22\text{–}22.16\text{ GPU-h}$ | $2.03\text{–}2.77\text{ GPU-h}$ |
+| **Direct 2-Way + Genuine Exact-$T_{16}$ Twin GPU** (*supp.*, `[E32]`, 1× L4) | **16.00 GiB Direct 2-Way (`twin2` / `single4`)** | **$29{,}310\text{–}114{,}507\text{ ctx/s}$** | **$132{,}888.7\text{ sol19/s}$** (genuine twins) | — (GPU slice telemetry) | **`8.98 GPU-h`** (genuine twins) | **`1.12 GPU-h`** (8× L4) |
 
-### 9.2 Scope, Terminology, and Limitations: Subspace-Restricted Preimages, Degree-of-Freedom Budget, Exact-$T_{16}$ Twin Capacity, and the 15-Theory Structural Barrier Theorem
+*(Note: The experimental `--bench-c2` through `--bench-c10` harnesses in `solve20_padded_cuda.cu` [Cycles 2, 4, and 7–10, including `run_bench_cycle2` which recorded $180{,}831.9\text{ sol19/s}$ / $6.60\text{ GPU-h}$ by forcing 16 contexts to share a single $T_{16}$] are synthetic architectural microbenchmarks; we exclude those figures from Table 9.1 and report only genuine-context rates.)*
+
+### 9.2 Scope, Terminology, and Limitations: Subspace-Restricted Preimages, Degree-of-Freedom Budget, Exact-$T_{16}$ Twin Capacity, and Construction-Specific Bottleneck Analysis
 
 To situate our results accurately within the SHA-256 cryptanalysis literature, we distinguish three notions of restriction in reduced-step preimage attacks:
 
-1. **Unpadded Compression Function vs. Full FIPS 180-4 Padded Hash Function:**
-   Prior practical 18-, 19-, and 20-step results [6, 7, 9] explicitly restrict their claims to the **unpadded compression function** ($W_0, \dots, W_{15} \in \{0,1\}^{512}$ unconstrained). Zaikin [7] specifies that Merkle–Damgård padding is omitted while keeping the standard $\mathrm{IV}$ and feed-forward, and Basra [9] notes: *"These results concern reduced-round compression, not padded or full SHA-256."* By contrast, our main 19- and 20-step solvers ([`solve20_padded_fast.c`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_fast.c), [`solve20_padded_cuda.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda.cu), [`solve20_padded_cuda_prod.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda_prod.cu)) satisfy all 72 bits of single-block FIPS 180-4 padding [1] ($W_{13} \bmod 256 = \mathtt{0x80}$, $W_{14} = 0$, $W_{15} = 440$), producing valid 55-byte (and 119-byte two-block) messages for the step-reduced hash function itself.
+1. **Unpadded Compression Function vs. Structured-Target Padded vs. Arbitrary-Target Full FIPS 180-4 Padded Hash Function:**
+   Prior practical 18-, 19-, and 20-step results [6, 7] and the unpadded solvers in [9] restrict their claims to the **unpadded compression function** ($W_0, \dots, W_{15} \in \{0,1\}^{512}$ unconstrained); Zaikin [7] specifies that Merkle–Damgård padding is omitted while keeping the standard $\mathrm{IV}$ and feed-forward. Basra [9] additionally demonstrated a 55-byte 20-step padded preimage for a structured target (`padded_r20/README.md` in [9], dated 17 October 2026). Our 19- and 20-step solvers (`src/pre19.c`, `solve20_padded_fast.c`, `solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu`) satisfy all 72 bits of single-block FIPS 180-4 padding [1] ($W_{13} \bmod 256 = \mathtt{0x80}$, $W_{14} = 0$, $W_{15} = 440$) for **arbitrary externally prescribed 256-bit targets**, producing valid 55-byte (and 119-byte two-block) messages across all 16 padded 20-step and 16 padded 19-step targets in §8.
 
 2. **Subspace-Restricted Preimages, Exact-$T_{16}$ Twin Capacity, and the Degree-of-Freedom Budget:**
-   Like all splice-and-cut MitM and biclique attacks on padded SHA-256 [2, 3, 4, 8, 10], which fix message lengths in $(W_{14}, W_{15})$ and pin internal state registers ("neutral words" / "initial structures") to decouple forward and backward chunks, our solver restricts its search to a structured **55-byte single-block internal-state manifold** defined by `[E8]`, `[E11]`, `[E13]`, and `[E22]`. Because a 55-byte message contains $440$ free message bits against a $256$-bit digest, the unconstrained message space holds $2^{440 - 256} = 2^{184}$ expected 20-step preimages per target $H^*$. Table 9.3 tracks how pinning internal state registers trades this surplus of solutions for $O(1)$ decoupling without exhausting the solution space.
+   Like all splice-and-cut MitM and biclique attacks on padded SHA-256 [2, 3, 4, 8, 10], which fix message lengths in $(W_{14}, W_{15})$ and pin internal state registers ("neutral words" / "initial structures") to decouple forward and backward chunks, our solver restricts its search to a structured **55-byte single-block internal-state manifold** defined by `[E8]`, `[E11]`, `[E13]`, and `[E22]`. Because a 55-byte message contains $440$ free message bits against a $256$-bit target digest $H^*$, the unconstrained 55-byte padded message space holds $2^{440 - 256} = 2^{184}$ expected preimages per 256-bit target for **both** the 19-step and 20-step hash functions. When searching for a 20-step preimage, the solver enumerates 19-step bridge candidates (`sol19`) that satisfy Steps 1–19 of the 20-step target (leaving the 32-bit terminal equation $\sigma_0(W_4) + W_3 = T_{19}$ open), so under a heuristic $2^{-32}$ terminal survival model the expected number of `sol19` bridge candidates for a given 20-step target is $2^{32}$ times the expected number of 20-step preimages inside the same restricted family. Table 9.3 tracks these model expectations across the 20-step manifold constraints.
 
-   **Table 9.3:** Degree-of-freedom budget across the 55-byte single-block padded manifold.
+   **Table 9.3:** Distributional degree-of-freedom budget across the 20-step 55-byte single-block padded manifold.
 
-   | Constraint / Algebraic Pinning | Equation | Bits Spent | Remaining 19-Step Padded Solutions | Remaining 20-Step Padded Solutions |
+   | Constraint / Algebraic Pinning | Equation | Bits Spent | Model Expected 20-Step Preimages per Target | Model Expected `sol19` Bridge Candidates per 20-Step Target |
    | :--- | :---: | :---: | :---: | :---: |
-   | Full 55-byte padded message space ($W_{13}\text{ pad}, W_{14}=0, W_{15}=440$) | `[E1]` | $72\text{ bits}$ (of 512) | $2^{216.0}$ | $2^{184.0}$ |
-   | Selector saturation ($e_9 = e_{10} = \mathtt{0xffffffff}$) [9] | `[E8]` | $64.0\text{ bits}$ | $2^{152.0}$ | $2^{120.0}$ |
-   | Exact context shaping ($a_5 = a_6 \iff D_{\text{shape}} = 0$) | `[E11]` | $32.0\text{ bits}$ | $2^{120.0}$ | $2^{88.0}$ |
-   | Majority absorption ($\mathrm{Maj}(a_5, a_4, a_3) = a_4$ on $w \le 14$) | `[E13]` | $\approx 9.2\text{ bits}$ | $2^{110.8}$ | **$2^{78.8}$** |
-   | Right-context $\mathrm{Ch}$-annihilation ($e_{15} = \mathtt{0xffffffff}$, $a_{10} = a_{11}$) | `[E22]` | $64.0\text{ bits}$ | $2^{40.94}$ ($\approx 2^{39.95}$ in 2-way table) | **$2^{8.94} \approx 490\text{–}805$** ($\approx 805$ in 2-way table) |
+   | Full 55-byte padded message space ($W_{13}\text{ pad}, W_{14}=0, W_{15}=440$) | `[E1]` | $72.0\text{ bits}$ (of 512) | $2^{184.00}$ | $2^{216.00}$ |
+   | Selector saturation ($e_9 = e_{10} = \mathtt{0xffffffff}$) [9] | `[E8]` | $64.0\text{ bits}$ | $2^{120.00}$ | $2^{152.00}$ |
+   | Exact context shaping ($a_5 = a_6 \iff D_{\text{shape}} = 0$) | `[E11]` | $32.0\text{ bits}$ | $2^{88.00}$ | $2^{120.00}$ |
+   | Majority absorption ($\mathrm{Maj}(a_5, a_4, a_3) = a_4$ on $w \le 14$) | `[E13]` | $13.40\text{ bits}$ ($13.28 + 0.12$) | **$2^{74.60}$** | $2^{106.60}$ |
+   | Right-context $\mathrm{Ch}$-annihilation ($e_{15} = \mathtt{0xffffffff}$, $a_{10} = a_{11}$) | `[E22]` | $64.0\text{ bits}$ | **$2^{10.60} \approx 1{,}552$** ($2^{8.69} \approx 413$ in 2-way table) | $2^{42.60}$ ($2^{40.69}$ in 2-way table) |
 
-   - **Carry-Sudoku Context Universe ($U \approx 1.014 \times 10^7$) vs. Exact-$T_{16}$ Twin Capacity (`single4` Mode):** Across all $2^{32}$ values of $a_{12}$ for a given target $H^*$, Algorithm 1 (`[E22]`–`[E26]`) produces an exact universe of $U \approx 1.014 \times 10^7 \approx 2^{23.27}$ valid right-hand contexts. Since each context yields $\approx 1.06 \times 10^5 \approx 2^{16.68}$ exact 19-step padded solutions in the 2-way table across $a_1 \in [0, 2^{32})$, the full universe $U$ yields $2^{23.27} \times 2^{16.68} \approx 805 \times 2^{32}$ 19-step solutions—i.e., **$\approx 805$ distinct 20-step padded preimages per target** ($\approx 1{,}590$ with the 32 GB 4-way table). Pairing contexts by exact 32-bit birthday collisions $T_{16}^{(i)} = T_{16}^{(j)}$ yields $N_{\text{twins}} \approx \frac{U^2}{2 \cdot 2^{32}} \approx 11{,}970$ disjoint pairs (`187` sweeps of $B=128$, $\approx 1.90 \times 2^{32}$ 19-step solutions), which suffices to solve a single target within the twin subset with Poisson probability $1 - e^{-1.90} = 85.0\%$ (empirically $11/14 = 78.6\%$ of single-block targets plus the 2-block `""` demo). For the remaining $15\%$ of targets (`"abc"`, `"padded test 6"`, `"padded test 9"`), sampling uniformly from the full $U \approx 1.014 \times 10^7$ reservoir using 4-way register-prefetched Level-1 lookups (`single4`, [`solve20_padded_cuda_prod.cu`](file:///Users/srw/Code/sha-check-eprint/solve20_padded_cuda_prod.cu)) solves all remaining targets with $100\%$ success across all 16 padded targets.
+   - **Carry-Sudoku Context Universe ($U \approx 1.68 \times 10^7$) vs. Exact-$T_{16}$ Twin Capacity (`single4` Mode):** Across all $2^{32}$ values of $a_{12}$ for a given 20-step target $H_{20}^*$, the complete 7-stage Carry-Sudoku cascade (`[E22]`–`[E25]`, Algorithm 1) produces an estimated universe of $U \approx 1.68 \times 10^7 \approx 2^{24.00}$ valid right-hand contexts (or $U_{\text{filt}} \approx 1.014 \times 10^7 \approx 2^{23.27}$ when the retired heuristic $\Sigma_0(a_9)$ window check `[E26]` was enabled). In our 2-way table configuration (`[E32]`), each context yields an empirical average of $\approx 1.06 \times 10^5 \approx 2^{16.69}$ 19-step bridge candidates (`sol19`) across $a_1 \in [0, 2^{32})$, so the estimated universe $U$ yields $\approx 2^{24.00} \times 2^{16.69} = 2^{40.69}$ reachable `sol19` bridge candidates ($\approx 413 = 2^{8.69}$ expected 20-step padded preimages per target under the $2^{-32}$ terminal model out of the $2^{10.60} \approx 1{,}552$ unfiltered manifold expectation, or $\approx 250 = 2^{7.97}$ when restricted to $U_{\text{filt}}$). Under a uniform birthday model over $U \approx 1.68 \times 10^7$ contexts, the expected number of natural Exact-$T_{16}$ twin pairs ($T_{16}^{(i)} = T_{16}^{(j)}$) is $N_{\text{twins}} \approx U^2 / 2^{33} \approx 32{,}890$ pairs ($65{,}780$ contexts), yielding $\approx 65{,}780 \times 1.06 \times 10^5 \approx 1.62 \times 2^{32}$ `sol19` candidates ($1 - e^{-1.62} \approx 80.3\%$ Poisson success probability from natural twins alone; if restricted to $U_{\text{filt}}$, $N_{\text{twins}} \approx 11{,}970$ pairs yielding $\approx 0.59 \times 2^{32}$ `sol19` candidates or $44.6\%$ Poisson success). Across our 16 padded 20-step targets, `twin2` (`sweep_exact16_cuda_kernel`) solved 12 targets directly; when natural twin pairs in a sampled pool are exhausted, the non-twin 4-way reservoir kernels (`single4` via `sweep_20_warp_l3_prod_kernel` in `solve20_padded_cuda_prod.cu` and `sweep_exact16_cuda_kernel` in `solve20_padded_cuda.cu`) sample directly from the full context reservoir, solving the remaining 4 targets (16/16 total).
    - **Binary 55-Byte Output Format vs. Two-Block Chosen-ASCII Prefix (119 Bytes):** In a single 55-byte block, $W_0, \dots, W_{10}$ and the upper 24 bits of $W_{13}$ are determined algebraically by the state trajectory. As demonstrated in §8.3, a **119-byte two-block message** ($W_{15}^{(2)} = 952 = \mathtt{0x3b8}$) allows the first 64-byte block $B_1$ to be arbitrary ASCII text while Block 2 is solved from chaining state $\mathrm{IV}' = \mathrm{Compress}_{20}(\mathrm{IV}, B_1)$ at identical complexity.
 
-3. **The 15-Theory Structural Barrier Theorem ($O(1)$ at 19 Steps, $\Theta(2^{32})$ at 20 Steps, $\Theta(2^{64})$ at 21 Steps):**
-   To determine whether *any* algebraic, differential, polynomial, cross-round, or multi-block shortcut can reduce 20-step preimages below $\Theta(2^{32})$, we formulated and tested **15 candidate sub-$2^{32}$ theories** ([`test_all_12_theories.c`](file:///Users/srw/Code/sha-check-eprint/test_all_12_theories.c), [`discover_r20_signals.c`](file:///Users/srw/Code/sha-check-eprint/discover_r20_signals.c), Table 9.4).
+3. **Construction-Specific Bottleneck Analysis and 15 Explored Sub-$2^{32}$ Directions:**
+   Within our decoupled Left/Right bridge architecture (`[E8]`–`[E14]`), each step beyond Step 19 adds one schedule relation $W_t = \sigma_1(W_{t-2}) + W_{t-7} + \sigma_0(W_{t-15}) + W_{t-16}$. By `[E37]`, $\sigma_0$ is an $\mathbb{F}_2$-linear bijection on $(\mathbb{F}_2)^{32}$ ($\mathrm{rank}_{\mathbb{F}_2}(\sigma_0) = 32$), so for any fixed Right context and Level-3 bridge leaf $(W_1, W_2, W_3)$, the terminal relation $\sigma_0(W_4) = T_{19} - W_3 \pmod{2^{32}}$ uniquely determines $W_4 = \sigma_0^{-1}(T_{19} - W_3 \pmod{2^{32}})$, acting as an exact 32-bit point filter against the value of $W_4$ determined by $(a_1, a_2, a_3, a_4)$ (though $\det_{\mathbb{F}_2}(\sigma_0) = 1$ alone does not prove statistical uniformity of $T_{19}$ across the bridge stream). To investigate whether an algebraic, differential, polynomial, cross-round, or multi-block modification could bypass this 32-bit terminal filter within our framework, we formulated and evaluated **15 candidate sub-$2^{32}$ attack directions** (`test_all_12_theories.c`, Table 9.4). We emphasize that Table 9.4 is a taxonomy of construction-specific negative results and surrogate empirical checks rather than a universal impossibility proof over all conceivable algorithms.
 
-   **Table 9.4:** Summary of the 15 algebraic, statistical, and multi-block theories tested against the $\Theta(2^{32})$ 20-step barrier.
+   **Table 9.4:** Taxonomy of 15 construction-specific candidate sub-$2^{32}$ directions evaluated against the 20-step terminal filter.
 
-   | # | Candidate Sub-$2^{32}$ Theory Tested | Mathematical Mechanism | Empirical / Algebraic Result | Complexity Verdict |
+   | # | Candidate Sub-$2^{32}$ Direction Evaluated | Mathematical Mechanism | Empirical / Algebraic Result | Observed Bottleneck |
    | :---: | :--- | :--- | :--- | :---: |
    | **1** | Rightward Spine Shift ($e_{10}=e_{11}=\mathtt{0xffffffff}$) | Shift bridge wall from $a_5$ to $a_6$ to gain 5 Left variables | $W_{16}$ requires $W_9(a_5, e_9)$ at Level 1 before $a_5$ is known (`W16 <-> W9` Causality Law) | Circular dependency ($\ge 2^{32}$) |
-   | **2** | Exact $\mathbb{F}_2^{32}$ Terminal Inversion (`[E37]`) | Invert $\sigma_0(W_4) = T_{19} - W_3$ directly via $\det_{\mathbb{F}_2}(\sigma_0)=1$ | Uniquely locks $W_4$, which overdetermines $a_4$ against Level-3 $Q_0(W_3) = t_{18}$ | 32-bit filter ($\Theta(2^{32})$) |
+   | **2** | Direct $\mathbb{F}_2^{32}$ Terminal Inversion (`[E37]`) | Invert $\sigma_0(W_4) = T_{19} - W_3$ directly via $\det_{\mathbb{F}_2}(\sigma_0)=1$ | Uniquely locks $W_4$, which overdetermines $a_4$ against Level-3 $Q_0(W_3) = t_{18}$ | 32-bit filter ($\approx 2^{32}$) |
    | **3** | Backward 4-Level Tree ($W_4 \to W_3 \to W_2 \to W_1$) | Start from $T_{19}$ and walk backward to $a_1$ | $W_4$ requires $(e_4, e_3, e_2, e_1)$, which depend non-triangularly on $(a_4, a_3, a_2, a_1)$ | Non-causal ($\ge 2^{32}$) |
-   | **4** | Cross-Context Meet-in-the-Middle ($T_{19}$ Multiplexing) | Reuse one Left chain $(a_1..a_4)$ across $M$ Right contexts | Left chain depends on the 96-bit triple $(T_{16}, T_{17}, T_{18})$; collision requires $2^{48}$ contexts | Birthday wall ($2^{48} \gg 2^{32}$) |
+   | **4** | Cross-Context Meet-in-the-Middle ($T_{19}$ Multiplexing) | Reuse one Left chain $(a_1..a_4)$ across $M$ Right contexts | Left chain depends on the 96-bit triple $(T_{16}, T_{17}, T_{18})$; collision requires $\approx 2^{48}$ contexts | Birthday wall ($2^{48} \gg 2^{32}$) |
    | **5** | LSB Carry-Chain Early Pruning on $\sigma_0(W_4) + W_3$ | Prune $a_4$ bit-by-bit using LSBs of $T_{19}$ | $\sigma_0(W_4)$ mixes MSB bits of $W_4$ into bit 0 via $\mathrm{ROR}(W_4, 7) \oplus \mathrm{ROR}(W_4, 18)$ | Full 32-bit mixing |
-   | **6** | Differential / Boomerang Trail on $a_1 \mapsto \sigma_0(W_4)+W_3$ | Flip bit $i$ of $a_1$ to induce a predictable $\Delta T_{19}$ | Measured across all 32 bit flips: exact **16.000 / 32 bits** avalanche (perfect PRF) | Zero differential bias |
-   | **7** | Linear / Walsh-Hadamard Approximation of $\sigma_0(W_4)+W_3$ | Correlate linear masks $\alpha \cdot a_1 \oplus \beta \cdot T_{19}$ | Max correlation across 3-level $Q_0^{-1}$ composition is indistinguishable from $2^{-16}$ noise | Zero linear bias |
-   | **8** | $\mathbb{F}_2$ / ANF Polynomial Degree Reduction (Gröbner / SAT) | Express $T_{19}(a_1)$ as low-degree boolean polynomials | 3-level modular addition + $Q_0^{-1}$ reaches algebraic degree $31$ on all 32 output bits | Full degree 31 ($\Theta(2^{32})$) |
-   | **9** | Invariant Subspace / Fixed-Point Manifold of $Q_0^{-1}$ | Restrict $W_1, W_2, W_3$ to $\sigma_0$-invariant subspaces | Affine shifts $T_{16}, T_{17}, T_{18}$ destroy $\mathbb{F}_2$-subspace invariance at every level | $\Theta(2^{32})$ |
-   | **10** | 2-Way Bi-Directional Bridge inside Single Block ($a_1 \leftrightarrow a_4$) | Meet at $a_2$ or $a_3$ from both ends of Left chain | $e_3$ and $e_4$ couple $(a_4, a_3, a_2, a_1)$ across 4 steps simultaneously; memory $\ge 2^{32}$ | $\Theta(2^{32})$ time-memory |
-   | **11** | Soft-Shaping Relaxation ($D_{\text{shape}} = a_5 \oplus a_6 \ne 0$) | Allow $D_{\text{shape}} \ne 0$ to let $a_4$ steer $W_{11}, W_{12}$ into $T_{19}$ | Every non-zero bit in $D_{\text{shape}}$ halves Level-3 survival, canceling any $T_{19}$ freedom | Net gain $\le 1\times$ |
-   | **12** | Unfrozen $e_{15} \ne \mathtt{0xffffffff}$ / $a_{10} \ne a_{11}$ Right Coupling | Vary $e_{15}$ or $a_{10}-a_{11}$ so multiple contexts share $(T_{16}, T_{17}, T_{18})$ | Unlocks $2^{78.8}$ total solutions, but each context still has independent 96-bit $(T_{16}, T_{17}, T_{18})$ | $\Theta(2^{32})$ per solution |
-   | **13** | **4-Round Crossed Carry-Sudoku Spine ($a_2=a_3=a_4=a_5$, `[E45]`)** | Pin $a_2=a_3=a_4=a_5$ so $W_1, W_2, W_3, W_4$ are $O(1)$ with $0$ $Q_0^{-1}$ lookups | Verified at $9{,}617.2\text{M evals/s}$ on L4 GPU, but spends 96 Left bits, turning $T_{16}, T_{17}, T_{18}$ into a 96-bit Right filter | Conservation of DoF ($\Theta(2^{32})$) |
-   | **14** | **5-Step Crossed Spine ($a_1=a_2=a_3=a_4=a_5$, `[E45]`)** | Pin all 5 Left words so $e_3 = a_{-1} - \Sigma_0(a_5)$ | Verified exact on GPU; spends all 128 Left bits, requiring $2^{128}$ Right contexts | Conservation of DoF |
-   | **15** | **Two-Block Feed-Forward Coupling ($M = B_1 \parallel B_2$, 119 Bytes)** | Use free 512-bit Block 1 ($B_1$) to steer chaining state $V = H^{(1)}$ into Block 2 | By Davies–Meyer feed-forward, $H_{20}^* = V + S_{20}^{(2)} \pmod{2^{32}}$: fixing $S_{20}^{(2)}$ uniquely locks all 256 bits of $V = H_{20}^* - S_{20}^{(2)}$ | **Two-Block Locking ($\Theta(2^{32})$)** |
+   | **6** | Differential / Boomerang Trail on Surrogate 3-Level Map | Flip bit $i$ in surrogate 3-level $Q_0$ chain (`test_theory_14`) | Measured across all 32 bit flips in surrogate model: $\approx 16.0 / 32\text{ bits}$ avalanche | No observed differential shortcut |
+   | **7** | Linear / Walsh-Hadamard Approximation | Correlate linear masks $\alpha \cdot a_1 \oplus \beta \cdot T_{19}$ | Alternating modular addition and $\mathbb{F}_2$-linear $Q_0^{-1}$ across 3 levels rapidly damps linear trails | No observed linear shortcut |
+   | **8** | $\mathbb{F}_2$ / ANF Polynomial Degree Reduction (Gröbner / SAT) | Express $T_{19}(a_1)$ as low-degree boolean polynomials | 3-level modular addition + $Q_0^{-1}$ carry chains reach high algebraic degree | High ANF degree |
+   | **9** | Invariant Subspace / Fixed-Point Manifold of $Q_0^{-1}$ | Restrict $W_1, W_2, W_3$ to $\sigma_0$-invariant subspaces | Affine shifts $T_{16}, T_{17}, T_{18}$ break $\mathbb{F}_2$-subspace invariance across levels | No invariant subspace found |
+   | **10** | 2-Way Bi-Directional Bridge inside Single Block ($a_1 \leftrightarrow a_4$) | Meet at $a_2$ or $a_3$ from both ends of Left chain | $e_3$ and $e_4$ couple $(a_4, a_3, a_2, a_1)$ across 4 steps simultaneously; memory $\ge 2^{32}$ | $\approx 2^{32}$ time-memory |
+   | **11** | Soft-Shaping Relaxation ($D_{\text{shape}} = a_5 \oplus a_6 \ne 0$) | Allow $D_{\text{shape}} \ne 0$ to let $a_4$ steer $W_{11}, W_{12}$ into $T_{19}$ | Every non-zero bit in $D_{\text{shape}}$ halves Level-3 survival, offsetting $T_{19}$ freedom | Net gain $\le 1\times$ |
+   | **12** | Unfrozen $e_{15} \ne \mathtt{0xffffffff}$ / $a_{10} \ne a_{11}$ Right Coupling | Vary $e_{15}$ or $a_{10}-a_{11}$ so multiple contexts share $(T_{16}, T_{17}, T_{18})$ | Enlarges right-context pool to $\approx 2^{74.60}$ model solutions, but each context still has its own $(T_{16}, T_{17}, T_{18})$ | $\approx 2^{32}$ `sol19` per hit |
+   | **13** | **4-Round Crossed Carry-Sudoku Spine ($a_2=a_3=a_4=a_5$, `[E45]`)** | Pin $a_2=a_3=a_4=a_5$ so $W_1, W_2, W_3, W_4$ are $O(1)$ with $0$ $Q_0^{-1}$ lookups | Specialized spine kernel runs at $9.62\text{G evals/s}$ on L4 GPU, but spends 96 Left bits, turning $T_{16}, T_{17}, T_{18}$ into a 96-bit Right filter | Conservation of DoF |
+   | **14** | **5-Step Crossed Spine ($a_1=a_2=a_3=a_4=a_5$, `[E45]`)** | Pin all 5 Left words so $e_3 = a_{-1} - \Sigma_0(a_5)$ | Verified algebraically; spends all 128 Left bits, requiring $2^{128}$ Right contexts | Conservation of DoF |
+   | **15** | **Two-Block Feed-Forward Coupling ($M = B_1 \parallel B_2$, 119 Bytes)** | Use free 512-bit Block 1 ($B_1$) to steer chaining state $V = H^{(1)}$ into Block 2 | By Davies–Meyer feed-forward, $H_{20}^* = V + S_{20}^{(2)} \pmod{2^{32}}$: fixing $S_{20}^{(2)}$ uniquely locks all 256 bits of $V = H_{20}^* - S_{20}^{(2)}$ | **Two-Block Locking** |
 
-   - **Proof of Theory 15 (Two-Block Feed-Forward Locking):** In a two-block 119-byte padded message $M = B_1 \parallel B_2$, Block 1 ($B_1 \in \{0,1\}^{512}$) maps $\mathrm{IV} \mapsto V = \mathrm{Compress}_{20}(\mathrm{IV}, B_1)$, and Block 2 maps $V \mapsto S_{20}^{(2)}$ with Davies–Meyer feed-forward $H_{20}^* = V + S_{20}^{(2)} \pmod{2^{32}} \iff S_{20}^{(2)} = H_{20}^* - V \pmod{2^{32}}$. Because $V$ enters Block 2 at **both** boundaries simultaneously (Step 0 as $V$ and Step 20 as $H_{20}^* - V$), choosing $B_1$ first fixes both boundaries and reduces Block 2 to a single-block 20-step padded problem ($\Theta(2^{32})$), while choosing Block 2's Right context first uniquely locks all 256 bits of $V = H_{20}^* - S_{20}^{(2)}$, requiring a full 256-bit 20-step compression preimage on Block 1 ($\Theta(2^{32})$). Meeting in the middle on the 256-bit chaining value $V$ requires $2^{128} \gg 2^{32}$.
-   - **Resulting Complexity Ladder:** Across both single-block and multi-block architectures under realistic memory, each step beyond 19 imposes an exact $2^{32}$ filter while spending 32 bits of the remaining $78.8$-bit solution surplus: **19 steps is $O(1)$** ($2^{6.14}\text{ SHA19-eq}$), **20 steps is $\Theta(2^{32})$** ($2^{38.14}\text{ SHA20-eq}$; $2^{78.8}$ solutions exist), **21 steps is $\Theta(2^{64})$** ($2^{46.8}$ solutions exist), **22 steps is $\Theta(2^{96})$** ($2^{14.8}$ solutions exist), and **23 steps has $0$ solutions** inside the $e_9=e_{10}=\mathtt{0xffffffff}, a_5=a_6$ manifold.
+   - **Analysis of Direction 15 (Two-Block Feed-Forward Locking):** In a two-block 119-byte padded message $M = B_1 \parallel B_2$, Block 1 ($B_1 \in \{0,1\}^{512}$) maps $\mathrm{IV} \mapsto V = \mathrm{Compress}_{20}(\mathrm{IV}, B_1)$, and Block 2 maps $V \mapsto S_{20}^{(2)}$ with Davies–Meyer feed-forward $H_{20}^* = V + S_{20}^{(2)} \pmod{2^{32}} \iff S_{20}^{(2)} = H_{20}^* - V \pmod{2^{32}}$. Because $V$ enters Block 2 at **both** boundaries simultaneously (Step 0 as $V$ and Step 20 as $H_{20}^* - V$), choosing $B_1$ first fixes both boundaries and reduces Block 2 to a single-block 20-step padded problem, while choosing Block 2's terminal state $S_{20}^{(2)}$ first uniquely locks all 256 bits of $V = H_{20}^* - S_{20}^{(2)}$, requiring a full 256-bit 20-step compression preimage on Block 1.
+   - **Resulting Construction-Specific Scaling:** While the unconstrained 55-byte padded message space ($2^{440}$ messages) has $2^{440-256} = 2^{184}$ expected preimages per 256-bit digest at any step count $R$, within our fixed-wall Left/Right bridge construction (`[E8]`+`[E11]`+`[E13]`), **19-step bridge candidates (`sol19`)** are generated in $O(1)$ amortized work ($24{,}228 \approx 2^{14.56}\text{ CPU-ref}$ evaluations per `sol19`, or $1.2\text{–}86.4\text{ s}$ for a standalone chosen-target 19-step padded preimage in `src/pre19.c`), whereas **20-step padded preimages** require testing the terminal schedule relation $\sigma_0(W_4) + W_3 \equiv T_{19} \pmod{2^{32}}$, costing an expected $2^{32}$ `sol19` candidates under a uniform terminal residual model ($191.1\text{ node-h}$ / $2^{46.56}\text{ CPU-ref}$ on 1× CPU node, or $8.98\text{–}22.16\text{ GPU-h}$ in supplementary 1× L4 GPU slice telemetry). Extending this same fixed-wall architecture beyond 20 steps shifts the terminal state boundary $(a_{R-7}, \dots, a_R)$ rightward and introduces additional schedule equations $W_{19}, \dots, W_{R-1}$ that each impose an additional 32-bit constraint unless new algebraic degrees of freedom are opened.
 
 ### Disclosure & Attribution
 
-The selector-saturation and context-shaping principle ($e_9 = e_{10} = \mathtt{0xffffffff}$, $a_5 \approx a_6$) is due to K. S. Basra [9] (`https://github.com/kamb-code/sha256-r19-preimage`), whose manuscripts note substantial assistance from AI tools. Both `srw/sha256-19step-preimages-with-padding` and the Carry-Sudoku / Slot-Sudoku solvers and witnesses in this work were developed with AI assistance.
+The selector-saturation and context-shaping principle ($e_9 = e_{10} = \mathtt{0xffffffff}$, $a_5 \approx a_6$), together with the observation that the FIPS 180-4 padding words $(W_{13}, W_{14}, W_{15})$ can be absorbed backward into $(a_7, a_6, a_5)$ at the cost of three context words and a 20-step padded witness for a structured target, is due to K. S. Basra [9] (`README.md`, `padded_r19/README.md`, `padded_r20/README.md`, and `paper/sha256_r19_preimage.pdf` in `https://github.com/kamb-code/sha256-r19-preimage`), whose manuscripts note substantial assistance from AI tools. Both `srw/sha256-19step-preimages-with-padding` and the algebraic discoveries (closed-form $O(1)$ $W_{13}$ padding pivot inversion, Theorem 1 / Carry-Sudoku, Theorem 2 / closed-form $\mathbb{F}_2$ upper-half reconstruction, Slot-Sudoku tables, and the Zero-$a_3$ bi-directional bridge), C/CUDA solvers, and preimage witnesses in this work were discovered and developed using **Google DeepMind Gemini 4 Argon**.
 
 ---
 
@@ -618,19 +667,17 @@ The selector-saturation and context-shaping principle ($e_9 = e_{10} = \mathtt{0
 2. **[2]** Isobe, T., Shibutani, K.: *Preimage Attacks on Reduced Tiger and SHA-2*. In: Dunkelman, O. (ed.) Fast Software Encryption – FSE 2009, LNCS, vol. 5665, pp. 139–155. Springer (2009).
 3. **[3]** Aoki, K., Guo, J., Matusiewicz, K., Sasaki, Y., Wang, L.: *Preimages for Step-Reduced SHA-2*. In: Matsui, M. (ed.) Advances in Cryptology – ASIACRYPT 2009, LNCS, vol. 5912, pp. 578–597. Springer (2009).
 4. **[4]** Khovratovich, D., Rechberger, C., Savelieva, A.: *Bicliques for Preimages: Attacks on Skein-512 and the SHA-2 Family*. In: Canteaut, A. (ed.) Fast Software Encryption – FSE 2012, LNCS, vol. 7549, pp. 244–263. Springer (2012).
-5. **[5]** Homsirikamol, E., Morawiecki, P., Rogawski, M., Srebrny, M.: *Security Margin Evaluation of SHA-256 through SAT-Based Cryptanalysis*. In: CISIM 2012, LNCS, vol. 7564, pp. 56–67. Springer (2012); IACR ePrint 2012/421.
-6. **[6]** Davydov, A., Pikhtovnikov, A., Kiryanova, E., Zaikin, O.: *Cryptographic Strength Analysis of the SHA-256 Hash Function Using the SAT Approach*. Scientific and Technical Journal of Information Technologies, Mechanics and Optics (2025).
-7. **[7]** Zaikin, O.: *Inverting 19-Round SHA-256 Compression Functions via Cube-and-Conquer*. Constraints (Jan 2026).
-8. **[8]** Guo, J., Li, M., Liu, G., Wang, M., Zhang, L.: *Improved Meet-in-the-Middle Preimage Attacks on Step-Reduced SHA-256/512*. In: Advances in Cryptology – EUROCRYPT 2026. Springer (2026); IACR ePrint 2026/353.
-9. **[9]** Basra, K. S.: *Context Shaping for 19- and 20-Round SHA-256 Compression Preimages*. GitHub manuscript, `https://github.com/kamb-code/sha256-r19-preimage` (Sep 2026).
-10. **[10]** Sasaki, Y., Aoki, K.: *Finding Preimages in Full MD5 Faster Than Exhaustive Search*. In: Joux, A. (ed.) Advances in Cryptology – EUROCRYPT 2009, LNCS, vol. 5479, pp. 134–152. Springer (2009).
+5. **[5]** Homsirikamol, E., Morawiecki, P., Rogawski, M., Srebrny, M.: *Security Margin Evaluation of SHA-3 Contest Finalists Through SAT-Based Attacks*. In: Cortesi, A. et al. (eds.) CISIM 2012, LNCS, vol. 7564, pp. 56–67. Springer (2012) (16-round SHA-256 SAT evaluation in ~1 h, Table 1).
+6. **[6]** Davydov, V. V., Pikhtovnikov, M. D., Kiryanova, A. P., Zaikin, O. S.: *Cryptographic Strength Analysis of the SHA-256 Hash Function Using the SAT Approach*. Scientific and Technical Journal of Information Technologies, Mechanics and Optics, vol. 25(3), pp. 428–437 (2025). DOI: `10.17586/2226-1494-2025-25-3-428-437`.
+7. **[7]** Zaikin, O.: *Preimage Attacks on Round-Reduced MD5, SHA-1, and SHA-256 Using Parameterized SAT Solver*. Constraints (published 23 Jan 2026). DOI: `10.1007/s10601-025-09383-0` (19-step unpadded all-ones target in 18 h 33 min on 192 CPU cores, §5 / Table 2).
+8. **[8]** Guo, J., Li, H., Liu, M., Wang, S., Zhang, T.: *Dual-Syncopation Meet-in-the-Middle Attacks: New Results on SHA-2 and MD5*. In: Advances in Cryptology – EUROCRYPT 2026. Springer (2026); IACR ePrint 2026/353.
+9. **[9]** Basra, K. S.: *Oracle-Free Preimage Attack on 19-Round Reduced SHA-256*, *The 20-Round Barrier for Table-Based Preimage Attacks on SHA-256*, and `README.md`, `padded_r19/README.md`, `padded_r20/README.md` (structured-target 20-round padded witness, 17 Oct 2026). GitHub repository and manuscripts, `https://github.com/kamb-code/sha256-r19-preimage` (Aug–Oct 2026).
+10. **[10]** Sasaki, Y., Wang, L., Aoki, K.: *Preimage Attacks on 41-Step SHA-256 and 46-Step SHA-512*. IACR Cryptology ePrint Archive, Report 2009/479 (2009).
 11. **[11]** Mendel, F., Nad, T., Schläffer, M.: *Improving Local Collisions: New Attacks on Reduced SHA-256*. In: Johansson, T., Nguyen, P. Q. (eds.) Advances in Cryptology – EUROCRYPT 2013, LNCS, vol. 7881, pp. 262–278. Springer (2013).
 12. **[12]** Mendel, F., Nad, T., Schläffer, M.: *Finding SHA-2 Characteristics: Searching through a Minefield of Contradictions*. In: Lee, D. H., Wang, X. (eds.) Advances in Cryptology – ASIACRYPT 2011, LNCS, vol. 7073, pp. 288–307. Springer (2011).
-13. **[13]** De Cannière, C., Rechberger, C.: *Finding SHA-1 Characteristics: General Results and Applications*. In: Lai, X., Chen, K. (eds.) Advances in Cryptology – ASIACRYPT 2006, LNCS, vol. 4284, pp. 1–20. Springer (2006).
-14. **[14]** Li, H., Isobe, T., Shibutani, K.: *New Practical/Semi-Free-Start Collision Attacks on Reduced SHA-256*. IACR Transactions on Symmetric Cryptology (ToSC), 2024(1), pp. 131–162 (2024).
-15. **[15]** Li, M., Liu, G., Qin, L., Sun, B., Wang, M.: *MILP-Based Automatic Search for Meet-in-the-Middle Preimage Attacks on SHA-2*. IACR Transactions on Symmetric Cryptology (ToSC), 2023(4), pp. 210–241 (2023).
-16. **[16]** Dobraunig, C., Eichlseder, M., Mendel, F.: *Analysis of SHA-512/224 and SHA-512/256*. In: Iwata, T., Cheon, J. H. (eds.) Advances in Cryptology – ASIACRYPT 2015, LNCS, vol. 9453, pp. 612–630. Springer (2015).
-17. **[17]** McDair: *17-Step Reduced SHA-256 Preimage Challenge Witnesses*. Cryptography Mailing List (`metzdowd.com`), Mar 2024.
-18. **[18]** Stevens, M., Bursztein, E., Karpman, P., Albertini, A., Markov, Y.: *The First Collision for Full SHA-1*. In: Katz, J., Shacham, H. (eds.) Advances in Cryptology – CRYPTO 2017, LNCS, vol. 10401, pp. 570–596. Springer (2017).
-19. **[19]** Leurent, G., Peyrin, T.: *SHA-1 is a Shambles: First Chosen-Prefix Collision on SHA-1 and Application to the PGP Web of Trust*. In: 29th USENIX Security Symposium (USENIX Security 2020), pp. 1839–1856 (2020).
-20. **[20]** Nossum, V.: *SAT-Based Preimage Attacks on SHA-1*. Master's Thesis, University of Oslo (2012).
+13. **[13]** De Cannière, C., Rechberger, C.: *Finding SHA-1 Characteristics: General Results and Applications*. In: Lai, X., Chen, K. (eds.) Advances in Cryptology – ASIACRYPT 2006, LNCS, vol. 4284, pp. 1–20. Springer (2006) (generalized characteristic framework introduced for SHA-1 and adapted to SHA-2 in [11, 12]).
+14. **[14]** Li, Y., Liu, F., Wang, G.: *New Records in Collision Attacks on SHA-2*. In: Joye, M., Leander, G. (eds.) Advances in Cryptology – EUROCRYPT 2024, LNCS, vol. 14651, pp. 158–186. Springer (2024); IACR ePrint 2024/349 (39-step SHA-256 semi-free-start and 40-step SHA-224 free-start collisions).
+15. **[15]** Dobraunig, C., Eichlseder, M., Mendel, F.: *Analysis of SHA-512/224 and SHA-512/256*. In: Iwata, T., Cheon, J. H. (eds.) Advances in Cryptology – ASIACRYPT 2015, LNCS, vol. 9453, pp. 612–630. Springer (2015).
+16. **[16]** McDair: *17-Step Reduced SHA-256 Preimage Challenge Witnesses*. Cryptography Mailing List (`metzdowd.com`, `2024-April/001334.html`), Mar–Apr 2024 (archived mailing-list posts of three 17-step messages without a published attack method).
+17. **[17]** Stevens, M., Bursztein, E., Karpman, P., Albertini, A., Markov, Y.: *The First Collision for Full SHA-1*. In: Katz, J., Shacham, H. (eds.) Advances in Cryptology – CRYPTO 2017, LNCS, vol. 10401, pp. 570–596. Springer (2017).
+18. **[18]** Leurent, G., Peyrin, T.: *SHA-1 is a Shambles: First Chosen-Prefix Collision on SHA-1 and Application to the PGP Web of Trust*. In: 29th USENIX Security Symposium (USENIX Security 2020), pp. 1839–1856 (2020).

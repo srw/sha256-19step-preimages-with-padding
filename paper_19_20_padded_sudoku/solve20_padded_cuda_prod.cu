@@ -68,7 +68,7 @@ __constant__ u32 d_padlen_bits = 440u;
 #define OFF 7
 #define MAX_BATCH_CTX 256
 
-#define ROR(x,n) (((x)>>(n))|((x)<<(32-(n))))
+#define ROR(x,n) (((x)>>((n)&31u))|((x)<<((32u-((n)&31u))&31u)))
 static inline u32 S0(u32 x){ return ROR(x,2)^ROR(x,13)^ROR(x,22); }
 static inline u32 S1(u32 x){ return ROR(x,6)^ROR(x,11)^ROR(x,25); }
 static inline u32 s0(u32 x){ return ROR(x,7)^ROR(x,18)^(x>>3); }
@@ -1110,12 +1110,6 @@ ctx_gen_cuda_kernel(
                             u32 X0       = X_5  - hi25;
                             u32 a7_base  = a7_b5 - (e14 & hi25);
 
-                            u32 B6_5   = c_a6 + MAJ_dev(a9_5, a8, a7_5);
-                            u32 a6_0   = B6_5 + S0_dev(a9_base);
-                            u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                            u32 delta0 = a6_0 - a5_0;
-                            if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u) continue;
-
                             u32 a9_i1  = a9_base + s19;
                             u32 X_i1   = X0 - s19;
                             u32 a7_bi1 = a7_base - (e14 & s19);
@@ -1389,7 +1383,7 @@ static u64 generate_right_contexts_parallel(int nthreads){
 }
 
 // Zero-table closed-form GF(2) inverse for upper 16 bits of u from (ulo, y):
-// Replaces 128 KB d_REC_HI16 global/L1/L2 memory lookups with 5 LOP3/SHL register ops!
+// Replaces 128 KB d_REC_HI16 global/L1/L2 memory lookups with ~19 bitwise/ALU register operations (5 logical stages)!
 __device__ __forceinline__ u32 reconstruct_u_dev(u32 ulo, u32 y){
     u32 v   = (ulo + y) ^ s0_dev(ulo);
     u32 b0  = ((v << 15) ^ (v << 11) ^ v) & 0x00010000u;
@@ -2002,8 +1996,10 @@ __global__ void build_exact16_gpu_kernel(
                     u32 idx32 = y >> 2;
                     u32 shift = ((y >> 1) & 1u) * 16u;
                     u32 cur32 = d_H_ovf4_u32[idx32];
-                    if(((cur32 >> shift) & 0xffffu) == 0u){
-                        atomicCAS(&d_H_ovf4_u32[idx32], cur32, cur32 | (ulo << shift));
+                    while(((cur32 >> shift) & 0xffffu) == 0u){
+                        u32 prev32 = atomicCAS(&d_H_ovf4_u32[idx32], cur32, cur32 | (ulo << shift));
+                        if(prev32 == cur32) break;
+                        cur32 = prev32;
                     }
                 }
             }
@@ -2527,17 +2523,7 @@ ctx_gen_fast_cuda_kernel(
                             u32 X0       = X_5  - hi25;
                             u32 a7_base  = a7_b5 - (e14 & hi25);
 
-                            if(ok19){
-                                u32 B6_5   = c_a6 + MAJ_dev(a9_5, a8, a7_5);
-                                u32 a6_0   = B6_5 + S0_dev(a9_base);
-                                u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                                u32 delta0 = a6_0 - a5_0;
-                                if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u){
-                                    ok19 = 0;
-                                }
-                            }
-
-                            // Only the ~0.8% surviving s15 candidates expand the 64 (s19 x s22) combinations across all 32 lanes!
+                            // Only the surviving s15 candidates expand the 64 (s19 x s22) combinations across all 32 lanes!
                             u32 mask19 = __ballot_sync(0xffffffffu, ok19);
                             while(mask19){
                                 int src19 = __ffs(mask19) - 1;
@@ -2611,21 +2597,34 @@ int main(int argc, char **argv){
         else if(!strcmp(argv[i], "--label") && i+1<argc) g_single_label = argv[++i];
         else if(!strcmp(argv[i], "--all-14-1block")) g_all_14_mode = 1;
         else if(!strcmp(argv[i], "--target-range") && i+1<argc){
-            if(sscanf(argv[++i], "%d:%d", &g_target_first, &g_target_last) != 2){
-                fprintf(stderr, "Invalid --target-range (expected first:last)\n");
+            if(sscanf(argv[++i], "%d:%d", &g_target_first, &g_target_last) != 2 ||
+               g_target_first < 0 || g_target_last > 13 || g_target_first > g_target_last){
+                fprintf(stderr, "Invalid --target-range (expected first:last in 0..13)\n");
                 return 1;
             }
-            if(g_target_first < 0) g_target_first = 0;
-            if(g_target_last > 13) g_target_last = 13;
         }
-        else if(!strcmp(argv[i], "--threads") && i+1<argc) cpu_threads = atoi(argv[++i]);
-        else if(!strcmp(argv[i], "--w-thresh") && i+1<argc) w_thresh = atoi(argv[++i]);
-        else if(!strcmp(argv[i], "--batch-ctx") && i+1<argc) batch_ctx = atoi(argv[++i]);
-        else if(!strcmp(argv[i], "--table-gb") && i+1<argc) table_gb = atoi(argv[++i]);
+        else if(!strcmp(argv[i], "--threads") && i+1<argc){
+            cpu_threads = atoi(argv[++i]);
+            if(cpu_threads < 1 || cpu_threads > 1024){ fprintf(stderr, "Invalid --threads (must be 1..1024)\n"); return 1; }
+        }
+        else if(!strcmp(argv[i], "--w-thresh") && i+1<argc){
+            w_thresh = atoi(argv[++i]);
+            if(w_thresh < 0 || w_thresh > 32){ fprintf(stderr, "Invalid --w-thresh (must be 0..32)\n"); return 1; }
+        }
+        else if(!strcmp(argv[i], "--batch-ctx") && i+1<argc){
+            batch_ctx = atoi(argv[++i]);
+            if(batch_ctx < 1 || batch_ctx > MAX_BATCH_CTX){ fprintf(stderr, "Invalid --batch-ctx (must be 1..%d)\n", MAX_BATCH_CTX); return 1; }
+        }
+        else if(!strcmp(argv[i], "--table-gb") && i+1<argc){
+            table_gb = atoi(argv[++i]);
+            if(table_gb != 0 && table_gb != 6 && table_gb != 16 && table_gb != 20){ fprintf(stderr, "Invalid --table-gb (must be 0, 6, 16, or 20)\n"); return 1; }
+        }
         else if(!strcmp(argv[i], "--max-sweeps") && i+1<argc) max_sweeps = strtoull(argv[++i], NULL, 10);
+        else {
+            fprintf(stderr, "Unknown or incomplete option: %s\n", argv[i]);
+            return 1;
+        }
     }
-    if(batch_ctx < 1) batch_ctx = 1;
-    if(batch_ctx > MAX_BATCH_CTX) batch_ctx = MAX_BATCH_CTX;
 
     if(iv_hex){
         if(parse_hex32(iv_hex, IV) != 0){

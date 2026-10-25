@@ -13,6 +13,14 @@
 //
 // Compile:
 //   nvcc -O3 -arch=native -Xcompiler -pthread solve20_padded_cuda.cu -o solve20_padded_cuda
+//
+// Note on Production Solver vs. Experimental Benchmark Harnesses:
+//   - Production solver mode and `--bench` / `--bench-c1` evaluate genuine unmutated Right contexts
+//     (and genuine birthday-collided Exact-T16 twin pairs).
+//   - Experimental microbenchmark harnesses (`--bench-c2` through `--bench-c10`, covering Cycles 2–10)
+//     are architectural exploration harnesses (e.g., testing shared-T16 Level-1 extraction, T17 tile
+//     clustering, and multi-target T19 bitmaps) and are excluded from the single-target complexity
+//     claims in the paper (see Sections 6.5 and 9.1).
 
 #include <cuda_runtime.h>
 #include <cub/cub.cuh>
@@ -68,7 +76,7 @@ __constant__ u32 d_padlen_bits = 440u;
 #define OFF 7
 #define MAX_BATCH_CTX 192
 
-#define ROR(x,n) (((x)>>(n))|((x)<<(32-(n))))
+#define ROR(x,n) (((x)>>((n)&31u))|((x)<<((32u-((n)&31u))&31u)))
 static inline u32 S0(u32 x){ return ROR(x,2)^ROR(x,13)^ROR(x,22); }
 static inline u32 S1(u32 x){ return ROR(x,6)^ROR(x,11)^ROR(x,25); }
 static inline u32 s0(u32 x){ return ROR(x,7)^ROR(x,18)^(x>>3); }
@@ -1113,12 +1121,6 @@ ctx_gen_cuda_kernel(
                             u32 X0       = X_5  - hi25;
                             u32 a7_base  = a7_b5 - (e14 & hi25);
 
-                            u32 B6_5   = c_a6 + MAJ_dev(a9_5, a8, a7_5);
-                            u32 a6_0   = B6_5 + S0_dev(a9_base);
-                            u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                            u32 delta0 = a6_0 - a5_0;
-                            if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u) continue;
-
                             u32 a9_i1  = a9_base + s19;
                             u32 X_i1   = X0 - s19;
                             u32 a7_bi1 = a7_base - (e14 & s19);
@@ -1415,7 +1417,7 @@ static u64 generate_right_contexts_parallel(int nthreads){
 }
 
 // Zero-table closed-form GF(2) inverse for upper 16 bits of u from (ulo, y):
-// Replaces 128 KB d_REC_HI16 global/L1/L2 memory lookups with 5 LOP3/SHL register ops!
+// Replaces 128 KB d_REC_HI16 global/L1/L2 memory lookups with ~19 bitwise/ALU register operations (5 logical stages)!
 __device__ __forceinline__ u32 reconstruct_u_dev(u32 ulo, u32 y){
     u32 v   = (ulo + y) ^ s0_dev(ulo);
     u32 b0  = ((v << 15) ^ (v << 11) ^ v) & 0x00010000u;
@@ -2028,8 +2030,10 @@ __global__ void build_exact16_gpu_kernel(
                     u32 idx32 = y >> 2;
                     u32 shift = ((y >> 1) & 1u) * 16u;
                     u32 cur32 = d_H_ovf4_u32[idx32];
-                    if(((cur32 >> shift) & 0xffffu) == 0u){
-                        atomicCAS(&d_H_ovf4_u32[idx32], cur32, cur32 | (ulo << shift));
+                    while(((cur32 >> shift) & 0xffffu) == 0u){
+                        u32 prev32 = atomicCAS(&d_H_ovf4_u32[idx32], cur32, cur32 | (ulo << shift));
+                        if(prev32 == cur32) break;
+                        cur32 = prev32;
                     }
                 }
             }
@@ -2777,17 +2781,7 @@ ctx_gen_fast_cuda_kernel(
                             u32 X0       = X_5  - hi25;
                             u32 a7_base  = a7_b5 - (e14 & hi25);
 
-                            if(ok19){
-                                u32 B6_5   = c_a6 + MAJ_dev(a9_5, a8, a7_5);
-                                u32 a6_0   = B6_5 + S0_dev(a9_base);
-                                u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                                u32 delta0 = a6_0 - a5_0;
-                                if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u){
-                                    ok19 = 0;
-                                }
-                            }
-
-                            // Only the ~0.8% surviving s15 candidates expand the 64 (s19 x s22) combinations across all 32 lanes!
+                            // Only the surviving s15 candidates expand the 64 (s19 x s22) combinations across all 32 lanes!
                             u32 mask19 = __ballot_sync(0xffffffffu, ok19);
                             while(mask19){
                                 int src19 = __ffs(mask19) - 1;
@@ -3665,12 +3659,32 @@ static int run_bench_cycle2(int cpu_threads, const u32 dig[8]){
            tg3 - tg2, rate_new, rate_new / rate_old);
     fflush(stdout);
 
-    // Reconstruct 16 real D=0 Right-contexts from the generated pool for the sweep benchmarks
-    u32 h_a12[64], h_a9[64];
-    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, 64 * sizeof(u32), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  64 * sizeof(u32), cudaMemcpyDeviceToHost));
+    // Reconstruct all 65,536 real D=0 Right-contexts from the generated pool and group by genuine colliding T16
+    u32 *h_a12 = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    u32 *h_a9  = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(d_a12)); CUDA_CHECK(cudaFree(d_a9));
     CUDA_CHECK(cudaFree(d_cnt)); CUDA_CHECK(cudaFree(d_ctr)); CUDA_CHECK(cudaFree(d_tr));
+
+    right_ctx_t *pool_c2 = (right_ctx_t *)malloc(bench_ctx_target * sizeof(right_ctx_t));
+    for(int i = 0; i < bench_ctx_target; i++){
+        reconstruct_right_ctx(h_a12[i], h_a9[i], &pool_c2[i]);
+    }
+    free(h_a12); free(h_a9);
+    qsort(pool_c2, bench_ctx_target, sizeof(right_ctx_t), cmp_rctx_t16);
+
+    int best_start = 0, best_mult = 1;
+    for(int i = 0; i < bench_ctx_target; ){
+        int j = i + 1;
+        while(j < bench_ctx_target && pool_c2[j].T16 == pool_c2[i].T16) j++;
+        if(j - i > best_mult){
+            best_mult  = j - i;
+            best_start = i;
+        }
+        i = j;
+    }
+    int actual_B = (best_mult <= 16) ? best_mult : 16;
 
     gpu_params_t p_base;
     memset(&p_base, 0, sizeof(p_base));
@@ -3679,30 +3693,28 @@ static int run_bench_cycle2(int cpu_threads, const u32 dig[8]){
     p_base.C_e1 = G_STATE.C_e1; p_base.C_W0 = G_STATE.C_W0;
     p_base.C_G1 = G_STATE.C_G1; p_base.C_G2 = G_STATE.C_G2; p_base.C_G3 = G_STATE.C_G3;
     p_base.w_thresh  = 14;
-    p_base.batch_ctx = 2;
+    p_base.batch_ctx = (actual_B >= 2) ? 2 : actual_B;
 
-    u32 shared_t16 = 0;
     for(int c = 0; c < 16; c++){
-        right_ctx_t rc;
-        reconstruct_right_ctx(h_a12[c], h_a9[c], &rc);
-        if(c == 0) shared_t16 = rc.T16;
+        right_ctx_t rc = (c < actual_B) ? pool_c2[best_start + c] : pool_c2[c];
         p_base.a5[c]  = rc.a5;
-        p_base.T16[c] = shared_t16; // Exact-T16 collision group
+        p_base.T16[c] = rc.T16; // Preserve genuine context T16 without synthetic overwrite
         p_base.T17[c] = rc.T17;
         p_base.T18[c] = rc.T18;
         p_base.T19[c] = rc.T19;
     }
+    free(pool_c2);
 
     const u64 SLICE = 1ULL << 29; // 1/8th of 2^32 per test
 
-    printf("\n--- [CYCLE-1 WINNER BASELINE] 16 GB Direct-Indexed 2-Way Exact + Idea 1+2 (B=2, w=14) ---\n");
+    printf("\n--- [CYCLE-1 WINNER BASELINE] 16 GB Direct-Indexed 2-Way Exact + Idea 1+2 (B=%d, w=14) ---\n", p_base.batch_ctx);
     idea_bench_res_t r_c1_win = run_cycle2_kernel_bench(
         "Cycle-1 Winner: 16GB Direct 2-Way + Idea 1+2 (B=2)", 0, d_H_exact16, d_stats, p_base, SLICE);
 
-    printf("\n--- [IDEA 5] Multi-Way Single-T16 Fusion (B=4, B=8, B=16 Sharing ONE Level-1 Lookup & Bridge) ---\n");
-    gpu_params_t p_b4 = p_base; p_b4.batch_ctx = 4;
-    gpu_params_t p_b8 = p_base; p_b8.batch_ctx = 8;
-    gpu_params_t p_b16 = p_base; p_b16.batch_ctx = 16;
+    printf("\n--- [IDEA 5] Multi-Way Single-T16 Fusion (Restricted to Genuine Collision Multiplicity actual_B=%d) ---\n", actual_B);
+    gpu_params_t p_b4 = p_base; p_b4.batch_ctx = (actual_B < 4) ? actual_B : 4;
+    gpu_params_t p_b8 = p_base; p_b8.batch_ctx = (actual_B < 8) ? actual_B : 8;
+    gpu_params_t p_b16 = p_base; p_b16.batch_ctx = (actual_B < 16) ? actual_B : 16;
     idea_bench_res_t r_i5_b4 = run_cycle2_kernel_bench(
         "Idea 5a: 4-Way Single-T16 Fusion (B=4, 16GB)", 1, d_H_exact16, d_stats, p_b4, SLICE);
     idea_bench_res_t r_i5_b8 = run_cycle2_kernel_bench(
@@ -4454,11 +4466,31 @@ static int run_bench_cycle3(int cpu_threads, const u32 dig[8]){
     ctx_gen_fast_cuda_kernel<<<232, 256>>>(a13, a14, a15, a16, 0x20261020u, bench_ctx_target, bench_ctx_target + 4096, d_a12, d_a9, d_cnt, d_ctr, d_tr);
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    u32 h_a12[64], h_a9[64];
-    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, 64 * sizeof(u32), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  64 * sizeof(u32), cudaMemcpyDeviceToHost));
+    u32 *h_a12 = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    u32 *h_a9  = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(d_a12)); CUDA_CHECK(cudaFree(d_a9));
     CUDA_CHECK(cudaFree(d_cnt)); CUDA_CHECK(cudaFree(d_ctr)); CUDA_CHECK(cudaFree(d_tr));
+
+    right_ctx_t *pool_c3 = (right_ctx_t *)malloc(bench_ctx_target * sizeof(right_ctx_t));
+    for(int i = 0; i < bench_ctx_target; i++){
+        reconstruct_right_ctx(h_a12[i], h_a9[i], &pool_c3[i]);
+    }
+    free(h_a12); free(h_a9);
+    qsort(pool_c3, bench_ctx_target, sizeof(right_ctx_t), cmp_rctx_t16);
+
+    int best_start = 0, best_mult = 1;
+    for(int i = 0; i < bench_ctx_target; ){
+        int j = i + 1;
+        while(j < bench_ctx_target && pool_c3[j].T16 == pool_c3[i].T16) j++;
+        if(j - i > best_mult){
+            best_mult  = j - i;
+            best_start = i;
+        }
+        i = j;
+    }
+    int actual_B = (best_mult <= 64) ? best_mult : 64;
 
     gpu_params_t p_base;
     memset(&p_base, 0, sizeof(p_base));
@@ -4467,32 +4499,30 @@ static int run_bench_cycle3(int cpu_threads, const u32 dig[8]){
     p_base.C_e1 = G_STATE.C_e1; p_base.C_W0 = G_STATE.C_W0;
     p_base.C_G1 = G_STATE.C_G1; p_base.C_G2 = G_STATE.C_G2; p_base.C_G3 = G_STATE.C_G3;
     p_base.w_thresh  = 14;
-    p_base.batch_ctx = 16;
+    p_base.batch_ctx = (actual_B < 16) ? actual_B : 16;
 
-    u32 shared_t16 = 0;
     for(int c = 0; c < 64; c++){
-        right_ctx_t rc;
-        reconstruct_right_ctx(h_a12[c], h_a9[c], &rc);
-        if(c == 0) shared_t16 = rc.T16;
+        right_ctx_t rc = (c < actual_B) ? pool_c3[best_start + c] : pool_c3[c];
         p_base.a5[c]  = rc.a5;
-        p_base.T16[c] = shared_t16; // Exact-T16 collision group
+        p_base.T16[c] = rc.T16; // Preserve genuine context T16 without synthetic overwrite
         p_base.T17[c] = rc.T17;
         p_base.T18[c] = rc.T18;
         p_base.T19[c] = rc.T19;
     }
+    free(pool_c3);
 
     const u64 SLICE = 1ULL << 29; // 1/8th of 2^32 per test
 
-    printf("\n--- [CYCLE-2 WINNER BASELINE] 16-Way Single-T16 Fusion (B=16, w=14, 16GB) ---\n");
+    printf("\n--- [CYCLE-2 WINNER BASELINE] Single-T16 Fusion (Restricted to Genuine Collision Multiplicity actual_B=%d, w=14, 16GB) ---\n", p_base.batch_ctx);
     idea_bench_res_t r_c2_win = run_cycle3_direct_bench(
         "Cycle-2 Winner: 16-Way Single-T16 Fusion (B=16, w=14)", 0, d_H_exact16, d_Q0_bitmap, d_stats, p_base, SLICE);
 
-    printf("\n--- [IDEA 9] Higher-Arity Single-T16 Fusion (B=32, B=64) + 16 GB w_thresh Pareto Sweep ---\n");
-    gpu_params_t p_b32_w14 = p_base; p_b32_w14.batch_ctx = 32; p_b32_w14.w_thresh = 14;
-    gpu_params_t p_b64_w14 = p_base; p_b64_w14.batch_ctx = 64; p_b64_w14.w_thresh = 14;
-    gpu_params_t p_b64_w15 = p_base; p_b64_w15.batch_ctx = 64; p_b64_w15.w_thresh = 15;
-    gpu_params_t p_b64_w13 = p_base; p_b64_w13.batch_ctx = 64; p_b64_w13.w_thresh = 13;
-    gpu_params_t p_b64_w12 = p_base; p_b64_w12.batch_ctx = 64; p_b64_w12.w_thresh = 12;
+    printf("\n--- [IDEA 9] Higher-Arity Single-T16 Fusion (Clamped to actual_B=%d) + 16 GB w_thresh Pareto Sweep ---\n", actual_B);
+    gpu_params_t p_b32_w14 = p_base; p_b32_w14.batch_ctx = (actual_B < 32) ? actual_B : 32; p_b32_w14.w_thresh = 14;
+    gpu_params_t p_b64_w14 = p_base; p_b64_w14.batch_ctx = (actual_B < 64) ? actual_B : 64; p_b64_w14.w_thresh = 14;
+    gpu_params_t p_b64_w15 = p_base; p_b64_w15.batch_ctx = (actual_B < 64) ? actual_B : 64; p_b64_w15.w_thresh = 15;
+    gpu_params_t p_b64_w13 = p_base; p_b64_w13.batch_ctx = (actual_B < 64) ? actual_B : 64; p_b64_w13.w_thresh = 13;
+    gpu_params_t p_b64_w12 = p_base; p_b64_w12.batch_ctx = (actual_B < 64) ? actual_B : 64; p_b64_w12.w_thresh = 12;
 
     idea_bench_res_t r_i9_b32_w14 = run_cycle3_direct_bench(
         "Idea 9a: 32-Way Single-T16 Fusion (B=32, w=14)", 0, d_H_exact16, d_Q0_bitmap, d_stats, p_b32_w14, SLICE);
@@ -5274,18 +5304,39 @@ static int run_bench_cycle4(int cpu_threads, const u32 dig[8]){
     CUDA_CHECK(cudaDeviceSynchronize());
     double tg1 = now_sec();
 
-    u32 h_a12[192], h_a9[192];
-    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, 192 * sizeof(u32), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  192 * sizeof(u32), cudaMemcpyDeviceToHost));
+    u32 *h_a12 = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    u32 *h_a9  = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(d_a12)); CUDA_CHECK(cudaFree(d_a9));
     CUDA_CHECK(cudaFree(d_cnt)); CUDA_CHECK(cudaFree(d_ctr)); CUDA_CHECK(cudaFree(d_tr));
 
+    right_ctx_t *pool_c4 = (right_ctx_t *)malloc(bench_ctx_target * sizeof(right_ctx_t));
+    for(int i = 0; i < bench_ctx_target; i++){
+        reconstruct_right_ctx(h_a12[i], h_a9[i], &pool_c4[i]);
+    }
+    free(h_a12); free(h_a9);
+    qsort(pool_c4, bench_ctx_target, sizeof(right_ctx_t), cmp_rctx_t16);
+
+    int best_start = 0, best_mult = 1;
+    for(int i = 0; i < bench_ctx_target; ){
+        int j = i + 1;
+        while(j < bench_ctx_target && pool_c4[j].T16 == pool_c4[i].T16) j++;
+        if(j - i > best_mult){
+            best_mult  = j - i;
+            best_start = i;
+        }
+        i = j;
+    }
+    int actual_B = (best_mult <= 192) ? best_mult : 192;
+
     right_ctx_t ctxs[192];
     for(int c = 0; c < 192; c++){
-        reconstruct_right_ctx(h_a12[c], h_a9[c], &ctxs[c]);
+        ctxs[c] = (c < actual_B) ? pool_c4[best_start + c] : pool_c4[c];
     }
-    printf("  Generated 192 valid D=0 Right-contexts on GPU in %.3fs (%.1f ctx/s)\n",
-           tg1 - tg0, (double)bench_ctx_target / (tg1 - tg0));
+    free(pool_c4);
+    printf("  Generated %d valid D=0 Right-contexts on GPU in %.3fs (%.1f ctx/s, max genuine T16 collision multiplicity=%d)\n",
+           bench_ctx_target, tg1 - tg0, (double)bench_ctx_target / (tg1 - tg0), actual_B);
 
     // 4. Allocate Level-1 Compaction, CUB RadixSort, and Tile Range buffers (supports up to 4096 tiles * 192 ctxs)
     u32 max_M = 64000000u; // Max bridges per 2^26 a1 chunk (~60.15M average, 100% untruncated)
@@ -5318,11 +5369,11 @@ static int run_bench_cycle4(int cpu_threads, const u32 dig[8]){
         p.C_e1 = G_STATE.C_e1; p.C_W0 = G_STATE.C_W0;
         p.C_G1 = G_STATE.C_G1; p.C_G2 = G_STATE.C_G2; p.C_G3 = G_STATE.C_G3;
         p.w_thresh  = w;
-        p.batch_ctx = B;
-        u32 shared_T16 = ctxs[0].T16;
-        for(int c = 0; c < B; c++){
+        int b_clamped = (B <= actual_B) ? B : actual_B;
+        p.batch_ctx = (b_clamped > 0) ? b_clamped : 1;
+        for(int c = 0; c < p.batch_ctx; c++){
             p.a5[c]  = ctxs[c].a5;
-            p.T16[c] = shared_T16;
+            p.T16[c] = ctxs[c].T16; // Preserve genuine context T16 without synthetic overwrite
             p.T17[c] = ctxs[c].T17;
             p.T18[c] = ctxs[c].T18;
             p.T19[c] = ctxs[c].T19;
@@ -6104,7 +6155,15 @@ static idea_bench_res_t run_cycle5_bench(
     int threads_per_block = 256;
     int num_tiles = 1 << (32 - tile_shift);
 
-    // Prepare constant-memory context table (optionally sorted by X_start = 0u - T17[c])
+    // Restrict B to genuine contexts sharing ctxs[0].T16 and prepare constant-memory context table
+    int valid_b = 0;
+    while(valid_b < B && ctxs[valid_b].T16 == ctxs[0].T16 &&
+          (ctxs[valid_b].a5 != 0u || ctxs[valid_b].T17 != 0u || ctxs[valid_b].T18 != 0u || ctxs[valid_b].T19 != 0u)){
+        valid_b++;
+    }
+    if(k_blk > 1 && valid_b >= k_blk) valid_b = (valid_b / k_blk) * k_blk;
+    B = (valid_b > 0) ? valid_b : 1;
+
     uint4 h_ctx4[MAX_CYCLE5_CTX];
     for(int c = 0; c < B; c++){
         h_ctx4[c] = make_uint4(ctxs[c].a5, ctxs[c].T17, ctxs[c].T18, ctxs[c].T19);
@@ -6283,20 +6342,39 @@ static int run_bench_cycle5(int cpu_threads, const u32 dig[8]){
     CUDA_CHECK(cudaDeviceSynchronize());
     double tg1 = now_sec();
 
-    u32 *h_a12 = (u32 *)malloc(MAX_CYCLE5_CTX * sizeof(u32));
-    u32 *h_a9  = (u32 *)malloc(MAX_CYCLE5_CTX * sizeof(u32));
-    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, MAX_CYCLE5_CTX * sizeof(u32), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  MAX_CYCLE5_CTX * sizeof(u32), cudaMemcpyDeviceToHost));
+    u32 *h_a12 = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    u32 *h_a9  = (u32 *)malloc(bench_ctx_target * sizeof(u32));
+    CUDA_CHECK(cudaMemcpy(h_a12, d_a12, bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(h_a9,  d_a9,  bench_ctx_target * sizeof(u32), cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaFree(d_a12)); CUDA_CHECK(cudaFree(d_a9));
     CUDA_CHECK(cudaFree(d_cnt)); CUDA_CHECK(cudaFree(d_ctr)); CUDA_CHECK(cudaFree(d_tr));
 
-    right_ctx_t *ctxs = (right_ctx_t *)malloc(MAX_CYCLE5_CTX * sizeof(right_ctx_t));
-    for(int c = 0; c < MAX_CYCLE5_CTX; c++){
-        reconstruct_right_ctx(h_a12[c], h_a9[c], &ctxs[c]);
+    right_ctx_t *pool_c5 = (right_ctx_t *)malloc(bench_ctx_target * sizeof(right_ctx_t));
+    for(int i = 0; i < bench_ctx_target; i++){
+        reconstruct_right_ctx(h_a12[i], h_a9[i], &pool_c5[i]);
     }
     free(h_a12); free(h_a9);
-    printf("  Generated %d valid D=0 Right-contexts on GPU in %.3fs (%.1f ctx/s)\n",
-           MAX_CYCLE5_CTX, tg1 - tg0, (double)bench_ctx_target / (tg1 - tg0));
+    qsort(pool_c5, bench_ctx_target, sizeof(right_ctx_t), cmp_rctx_t16);
+
+    int best_start = 0, best_mult = 1;
+    for(int i = 0; i < bench_ctx_target; ){
+        int j = i + 1;
+        while(j < bench_ctx_target && pool_c5[j].T16 == pool_c5[i].T16) j++;
+        if(j - i > best_mult){
+            best_mult  = j - i;
+            best_start = i;
+        }
+        i = j;
+    }
+    int actual_B = (best_mult <= MAX_CYCLE5_CTX) ? best_mult : MAX_CYCLE5_CTX;
+
+    right_ctx_t *ctxs = (right_ctx_t *)malloc(MAX_CYCLE5_CTX * sizeof(right_ctx_t));
+    for(int c = 0; c < MAX_CYCLE5_CTX; c++){
+        ctxs[c] = (c < actual_B) ? pool_c5[best_start + c] : pool_c5[c];
+    }
+    free(pool_c5);
+    printf("  Generated %d valid D=0 Right-contexts on GPU in %.3fs (%.1f ctx/s, max genuine T16 collision multiplicity=%d)\n",
+           bench_ctx_target, tg1 - tg0, (double)bench_ctx_target / (tg1 - tg0), actual_B);
 
     // 4. Allocate Level-1 Compaction, CUB RadixSort, and Tile Range buffers (supports up to 4096 tiles * 512 ctxs)
     u32 max_M = 64000000u; // Max bridges per 2^26 a1 chunk (~60.15M average, 100% untruncated)
@@ -6328,10 +6406,10 @@ static int run_bench_cycle5(int cpu_threads, const u32 dig[8]){
     p_c4_win.C_e1 = G_STATE.C_e1; p_c4_win.C_W0 = G_STATE.C_W0;
     p_c4_win.C_G1 = G_STATE.C_G1; p_c4_win.C_G2 = G_STATE.C_G2; p_c4_win.C_G3 = G_STATE.C_G3;
     p_c4_win.w_thresh  = 12;
-    p_c4_win.batch_ctx = 192;
-    for(int c = 0; c < 192; c++){
+    p_c4_win.batch_ctx = (actual_B < 192) ? actual_B : 192;
+    for(int c = 0; c < p_c4_win.batch_ctx; c++){
         p_c4_win.a5[c]  = ctxs[c].a5;
-        p_c4_win.T16[c] = ctxs[0].T16;
+        p_c4_win.T16[c] = ctxs[c].T16; // Preserve genuine context T16 without synthetic overwrite
         p_c4_win.T17[c] = ctxs[c].T17;
         p_c4_win.T18[c] = ctxs[c].T18;
         p_c4_win.T19[c] = ctxs[c].T19;
@@ -6846,6 +6924,14 @@ static idea_bench_res_t run_cycle6_bench(
 {
     int threads_per_block = 256;
     int num_tiles = 1 << (32 - tile_shift);
+
+    int valid_b = 0;
+    while(valid_b < B && ctxs[valid_b].T16 == ctxs[0].T16 &&
+          (ctxs[valid_b].a5 != 0u || ctxs[valid_b].T17 != 0u || ctxs[valid_b].T18 != 0u || ctxs[valid_b].T19 != 0u)){
+        valid_b++;
+    }
+    if(k_blk > 1 && valid_b >= k_blk) valid_b = (valid_b / k_blk) * k_blk;
+    B = (valid_b > 0) ? valid_b : 1;
 
     uint4 h_ctx4[MAX_CYCLE5_CTX];
     for(int c = 0; c < B; c++){
@@ -7558,25 +7644,31 @@ static int cmp_c7_int_asc(const void *a, const void *b){
     return (ia > ib) - (ia < ib);
 }
 
-static void select_c7_t17_constellation(
+static int select_c7_t17_constellation(
     const right_ctx_t *pool, int pool_n, int B, int K,
     u32 shared_T16, right_ctx_t *out_ctxs, u32 *out_max_span, double *out_avg_span)
 {
+    memset(out_ctxs, 0, (size_t)B * sizeof(right_ctx_t));
     right_ctx_t *sorted = (right_ctx_t *)malloc(pool_n * sizeof(right_ctx_t));
-    memcpy(sorted, pool, pool_n * sizeof(right_ctx_t));
-    qsort(sorted, pool_n, sizeof(right_ctx_t), cmp_c7_ctx_xstart);
+    int filt_n = 0;
+    for(int i = 0; i < pool_n; i++){
+        if(pool[i].T16 == shared_T16){
+            sorted[filt_n++] = pool[i];
+        }
+    }
+    qsort(sorted, filt_n, sizeof(right_ctx_t), cmp_c7_ctx_xstart);
 
     // Deduplicate any identical T17s just in case
     int u_n = 0;
-    for(int i = 0; i < pool_n; i++){
+    for(int i = 0; i < filt_n; i++){
         if(i == 0 || sorted[i].T17 != sorted[u_n - 1].T17){
             sorted[u_n++] = sorted[i];
         }
     }
 
     int num_clusters = B / K;
-    int n_cands = u_n - K + 1;
-    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc(n_cands * sizeof(c7_cluster_cand_t));
+    int n_cands = (u_n >= K) ? (u_n - K + 1) : 0;
+    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc((size_t)(n_cands > 0 ? n_cands : 1) * sizeof(c7_cluster_cand_t));
     for(int i = 0; i < n_cands; i++){
         u32 x0 = 0u - sorted[i].T17;
         u32 x1 = 0u - sorted[i + K - 1].T17;
@@ -7585,8 +7677,8 @@ static void select_c7_t17_constellation(
     }
     qsort(cands, n_cands, sizeof(c7_cluster_cand_t), cmp_c7_cluster_span);
 
-    u8 *used = (u8 *)calloc(u_n, 1);
-    int *chosen_starts = (int *)malloc(num_clusters * sizeof(int));
+    u8 *used = (u8 *)calloc(u_n > 0 ? u_n : 1, 1);
+    int *chosen_starts = (int *)malloc((size_t)(num_clusters > 0 ? num_clusters : 1) * sizeof(int));
     int picked = 0;
     u32 max_sp = 0;
     u64 sum_sp = 0;
@@ -7605,11 +7697,11 @@ static void select_c7_t17_constellation(
     }
     qsort(chosen_starts, picked, sizeof(int), cmp_c7_int_asc);
 
+    (void)shared_T16;
     for(int g = 0; g < picked; g++){
         int st = chosen_starts[g];
         for(int k = 0; k < K; k++){
             out_ctxs[g * K + k] = sorted[st + k];
-            out_ctxs[g * K + k].T16 = shared_T16;
         }
         // For K=4, place the median context (index 1) at the anchor position (index 0) to halve max offset from anchor!
         if(K == 4){
@@ -7618,7 +7710,6 @@ static void select_c7_t17_constellation(
             out_ctxs[g * 4 + 1] = tmp;
         }
     }
-    out_ctxs[0].T16 = shared_T16;
 
     if(out_max_span) *out_max_span = max_sp;
     if(out_avg_span) *out_avg_span = (double)sum_sp / (double)(picked > 0 ? picked : 1);
@@ -7627,6 +7718,7 @@ static void select_c7_t17_constellation(
     free(used);
     free(cands);
     free(sorted);
+    return picked * K;
 }
 
 static idea_bench_res_t run_cycle7_bench(
@@ -7657,9 +7749,36 @@ static idea_bench_res_t run_cycle7_bench(
     int threads_per_block = 256;
     int num_tiles = 1 << (32 - tile_shift);
 
+    int valid_ctxs = 0;
+    while(valid_ctxs < B && (ctxs[valid_ctxs].a5 != 0u || ctxs[valid_ctxs].T17 != 0u || ctxs[valid_ctxs].T18 != 0u || ctxs[valid_ctxs].T19 != 0u)){
+        valid_ctxs++;
+    }
+    B = (valid_ctxs / K_cluster) * K_cluster;
+    if(B < K_cluster){
+        idea_bench_res_t empty_r;
+        memset(&empty_r, 0, sizeof(empty_r));
+        empty_r.name = name;
+        if(!quiet) printf("  %-64s | SKIPPED (insufficient constellation contexts: %d < %d)\n", name, valid_ctxs, K_cluster);
+        return empty_r;
+    }
+
     uint4 h_ctx4[MAX_CYCLE5_CTX];
+    int actual_B = 0;
     for(int c = 0; c < B; c++){
-        h_ctx4[c] = make_uint4(ctxs[c].a5, ctxs[c].T17, ctxs[c].T18, ctxs[c].T19);
+        if(ctxs[c].a5 == 0u && ctxs[c].T17 == 0u && ctxs[c].T18 == 0u && ctxs[c].T19 == 0u){
+            fprintf(stderr, "Error: zero-initialized context in run_cycle7_bench at c=%d\n", c);
+            exit(1);
+        }
+        if(ctxs[0].T16 == shared_T16 && ctxs[c].T16 != shared_T16) continue;
+        h_ctx4[actual_B++] = make_uint4(ctxs[c].a5, ctxs[c].T17, ctxs[c].T18, ctxs[c].T19);
+    }
+    B = (actual_B / K_cluster) * K_cluster;
+    if(B < K_cluster){
+        idea_bench_res_t empty_r;
+        memset(&empty_r, 0, sizeof(empty_r));
+        empty_r.name = name;
+        if(!quiet) printf("  %-64s | SKIPPED (insufficient matching-T16 contexts: %d < %d)\n", name, actual_B, K_cluster);
+        return empty_r;
     }
     CUDA_CHECK(cudaMemcpyToSymbol(c_ctx4, h_ctx4, B * sizeof(uint4)));
 
@@ -7991,7 +8110,6 @@ static int run_bench_cycle7(int cpu_threads, const u32 dig[8]){
     double probe_top384_mean = 0.0;
     for(int i = 0; i < 384; i++){
         ctxs_bandit384[i] = pool[pr_scores[i].idx];
-        ctxs_bandit384[i].T16 = shared_T16;
         probe_top384_mean += (double)pr_scores[i].score;
     }
     probe_top384_mean /= 384.0;
@@ -8020,7 +8138,6 @@ static int run_bench_cycle7(int cpu_threads, const u32 dig[8]){
     right_ctx_t *ctxs_feat384 = (right_ctx_t *)malloc(384 * sizeof(right_ctx_t));
     for(int i = 0; i < 384; i++){
         ctxs_feat384[i] = pool[feat_scores[i].idx];
-        ctxs_feat384[i].T16 = shared_T16;
     }
 
     idea_bench_res_t r_i24b = run_cycle7_bench(
@@ -8351,16 +8468,6 @@ ctx_gen_c8_exact_t16_cuda_kernel(
                             u32 a9_base  = a9_5 + hi25;
                             u32 X0       = X_5  - hi25;
                             u32 a7_base  = a7_b5 - (e14 & hi25);
-
-                            if(ok19){
-                                u32 B6_5   = c_a6 + MAJ_dev(a9_5, a8, a7_5);
-                                u32 a6_0   = B6_5 + S0_dev(a9_base);
-                                u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                                u32 delta0 = a6_0 - a5_0;
-                                if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u){
-                                    ok19 = 0;
-                                }
-                            }
 
                             u32 mask19 = __ballot_sync(0xffffffffu, ok19);
                             while(mask19){
@@ -8797,10 +8904,11 @@ sweep_cycle8_integrated_kernel(
 }
 
 // Select B_total contexts (e.g., R * 384 = 3,072) partitioned into disjoint K-way T17-constellations from pool_n contexts!
-static void select_c8_multi_batch_constellation(
+static int select_c8_multi_batch_constellation(
     const right_ctx_t *pool, int pool_n, int B_total, int K,
     u32 shared_T16, right_ctx_t *out_ctxs, u32 *out_max_span, double *out_avg_span)
 {
+    memset(out_ctxs, 0, (size_t)B_total * sizeof(right_ctx_t));
     right_ctx_t *sorted = (right_ctx_t *)malloc(pool_n * sizeof(right_ctx_t));
     memcpy(sorted, pool, pool_n * sizeof(right_ctx_t));
     qsort(sorted, pool_n, sizeof(right_ctx_t), cmp_c7_ctx_xstart);
@@ -8813,8 +8921,8 @@ static void select_c8_multi_batch_constellation(
     }
 
     int num_clusters = B_total / K;
-    int n_cands = u_n - K + 1;
-    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc(n_cands * sizeof(c7_cluster_cand_t));
+    int n_cands = (u_n >= K) ? (u_n - K + 1) : 0;
+    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc((size_t)(n_cands > 0 ? n_cands : 1) * sizeof(c7_cluster_cand_t));
     for(int i = 0; i < n_cands; i++){
         u32 x0 = 0u - sorted[i].T17;
         u32 x1 = 0u - sorted[i + K - 1].T17;
@@ -8823,8 +8931,8 @@ static void select_c8_multi_batch_constellation(
     }
     qsort(cands, n_cands, sizeof(c7_cluster_cand_t), cmp_c7_cluster_span);
 
-    u8 *used = (u8 *)calloc(u_n, 1);
-    int *chosen_starts = (int *)malloc(num_clusters * sizeof(int));
+    u8 *used = (u8 *)calloc(u_n > 0 ? u_n : 1, 1);
+    int *chosen_starts = (int *)malloc((size_t)(num_clusters > 0 ? num_clusters : 1) * sizeof(int));
     int picked = 0;
     u32 max_sp = 0;
     u64 sum_sp = 0;
@@ -8843,11 +8951,11 @@ static void select_c8_multi_batch_constellation(
     }
     qsort(chosen_starts, picked, sizeof(int), cmp_c7_int_asc);
 
+    (void)shared_T16;
     for(int g = 0; g < picked; g++){
         int st = chosen_starts[g];
         for(int k = 0; k < K; k++){
             out_ctxs[g * K + k] = sorted[st + k];
-            out_ctxs[g * K + k].T16 = shared_T16;
         }
         // Place median context at anchor position 0 to minimize max offset from anchor!
         int med = K / 2 - 1;
@@ -8865,6 +8973,7 @@ static void select_c8_multi_batch_constellation(
     free(used);
     free(cands);
     free(sorted);
+    return picked * K;
 }
 
 // Run Cycle-8 Multi-Batch Reuse Benchmark:
@@ -8896,6 +9005,22 @@ static idea_bench_res_t run_cycle8_multibatch_bench(
 {
     int threads_per_block = 256;
     int num_tiles = 1 << (32 - tile_shift);
+    int valid_ctxs = 0;
+    while(valid_ctxs < B * R_batches && (ctxs_all[valid_ctxs].T16 != 0 || ctxs_all[valid_ctxs].T17 != 0 || ctxs_all[valid_ctxs].T18 != 0)) {
+        valid_ctxs++;
+    }
+    if(valid_ctxs < B * R_batches) {
+        if(valid_ctxs < B) B = (valid_ctxs / K_cluster) * K_cluster;
+        if(B > 0) R_batches = valid_ctxs / B;
+        else R_batches = 0;
+    }
+    if(B <= 0 || R_batches <= 0) {
+        idea_bench_res_t empty_res;
+        memset(&empty_res, 0, sizeof(empty_res));
+        empty_res.name = name;
+        printf("[Cycle8] Skipping %s: insufficient genuine colliding contexts (%d found)\n", name, valid_ctxs);
+        return empty_res;
+    }
     int B_eff = B * R_batches;
 
     gpu_params_t params;
@@ -8950,37 +9075,40 @@ static idea_bench_res_t run_cycle8_multibatch_bench(
         for(int r_idx = 0; r_idx < R_batches; r_idx++){
             const right_ctx_t *batch_ctxs = &ctxs_all[r_idx * B];
             uint4 h_ctx4[MAX_CYCLE5_CTX];
+            int actual_B = 0;
             for(int c = 0; c < B; c++){
-                h_ctx4[c] = make_uint4(batch_ctxs[c].a5, batch_ctxs[c].T17, batch_ctxs[c].T18, batch_ctxs[c].T19);
+                if(batch_ctxs[0].T16 == shared_T16 && batch_ctxs[c].T16 != shared_T16) continue;
+                h_ctx4[actual_B++] = make_uint4(batch_ctxs[c].a5, batch_ctxs[c].T17, batch_ctxs[c].T18, batch_ctxs[c].T19);
             }
-            CUDA_CHECK(cudaMemcpyToSymbol(c_ctx4, h_ctx4, B * sizeof(uint4)));
+            if(actual_B < K_cluster) continue;
+            CUDA_CHECK(cudaMemcpyToSymbol(c_ctx4, h_ctx4, actual_B * sizeof(uint4)));
 
-            int tot_tc = num_tiles * B;
+            int tot_tc = num_tiles * actual_B;
             int rng_blocks = (tot_tc + threads_per_block - 1) / threads_per_block;
             compute_tile_ranges_const_kernel<<<rng_blocks, threads_per_block>>>(
-                d_X_sorted, h_M, num_tiles, tile_shift, B, d_tile_ranges);
+                d_X_sorted, h_M, num_tiles, tile_shift, actual_B, d_tile_ranges);
 
-            int ctx_groups = B / K_cluster;
+            int ctx_groups = actual_B / K_cluster;
             int swp_blocks = num_tiles * ctx_groups * sub_blocks;
             if(K_cluster == 4){
                 if(!use_2stage){
                     sweep_cycle8_integrated_kernel<4, false><<<swp_blocks, threads_per_block>>>(
                         d_H_exact16, d_Q0_bitmap, 1, d_XG2_sorted, d_a1_sorted, d_tile_ranges,
-                        d_multi_t19_bitmap, B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
+                        d_multi_t19_bitmap, actual_B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
                 } else {
                     sweep_cycle8_integrated_kernel<4, true><<<swp_blocks, threads_per_block>>>(
                         d_H_exact16, d_Q0_bitmap, 1, d_XG2_sorted, d_a1_sorted, d_tile_ranges,
-                        d_multi_t19_bitmap, B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
+                        d_multi_t19_bitmap, actual_B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
                 }
             } else {
                 if(!use_2stage){
                     sweep_cycle8_integrated_kernel<8, false><<<swp_blocks, threads_per_block>>>(
                         d_H_exact16, d_Q0_bitmap, 1, d_XG2_sorted, d_a1_sorted, d_tile_ranges,
-                        d_multi_t19_bitmap, B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
+                        d_multi_t19_bitmap, actual_B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
                 } else {
                     sweep_cycle8_integrated_kernel<8, true><<<swp_blocks, threads_per_block>>>(
                         d_H_exact16, d_Q0_bitmap, 1, d_XG2_sorted, d_a1_sorted, d_tile_ranges,
-                        d_multi_t19_bitmap, B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
+                        d_multi_t19_bitmap, actual_B, sub_blocks, w_lo_max, w_thresh, params, d_stats);
                 }
             }
         }
@@ -9601,16 +9729,6 @@ ctx_gen_c9_exact_t16_t17_cuda_kernel(
                             u32 X0       = X_5  - hi25;
                             u32 a7_base  = a7_b5 - (e14 & hi25);
 
-                            if(ok19){
-                                u32 B6_5   = c_a6 + MAJ_dev(a9_5, a8, a7_5);
-                                u32 a6_0   = B6_5 + S0_dev(a9_base);
-                                u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                                u32 delta0 = a6_0 - a5_0;
-                                if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u){
-                                    ok19 = 0;
-                                }
-                            }
-
                             u32 mask19 = __ballot_sync(0xffffffffu, ok19);
                             while(mask19){
                                 int src19 = __ffs(mask19) - 1;
@@ -10177,6 +10295,7 @@ static int select_c9_twin_constellation(
     const right_ctx_t *sorted_by_t17, int n_pool, int B_total, int K_ctx,
     u32 shared_T16, right_ctx_t *out_ctxs, u32 *out_max_span, double *out_avg_span)
 {
+    memset(out_ctxs, 0, (size_t)B_total * sizeof(right_ctx_t));
     int max_pairs = n_pool / 2;
     right_ctx_t *pairs = (right_ctx_t *)malloc((size_t)max_pairs * 2 * sizeof(right_ctx_t));
     int n_exact_zero_pairs = 0;
@@ -10191,13 +10310,19 @@ static int select_c9_twin_constellation(
         }
     }
 
-    // Build max_pairs dense Exact-T17 Twin Pairs across the full 262K sorted pool
+    // Build genuine Exact-T17 Twin Pairs across the sorted pool sharing global shared_T16
     int n_pairs = 0;
-    for(int i = 0; i + 1 < n_pool && n_pairs < max_pairs; i += 2){
-        pairs[2 * n_pairs + 0] = sorted_by_t17[i];
-        pairs[2 * n_pairs + 1] = sorted_by_t17[i + 1];
-        pairs[2 * n_pairs + 1].T17 = pairs[2 * n_pairs + 0].T17; // Fused Exact-T17 Twin (dT17 == 0)
-        n_pairs++;
+    for(int i = 0; i + 1 < n_pool && n_pairs < max_pairs; ){
+        if(sorted_by_t17[i].T17 == sorted_by_t17[i + 1].T17 &&
+           sorted_by_t17[i].T16 == sorted_by_t17[i + 1].T16 &&
+           sorted_by_t17[i].T16 == shared_T16){
+            pairs[2 * n_pairs + 0] = sorted_by_t17[i];
+            pairs[2 * n_pairs + 1] = sorted_by_t17[i + 1];
+            n_pairs++;
+            i += 2;
+        } else {
+            i++;
+        }
     }
 
     // Sort twin pairs by X_start = 0u - T17 ascending
@@ -10218,8 +10343,8 @@ static int select_c9_twin_constellation(
     int K_pairs = K_ctx / 2;
     int num_clusters = B_total / K_ctx;
 
-    int n_cands = n_pairs - K_pairs + 1;
-    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc((size_t)n_cands * sizeof(c7_cluster_cand_t));
+    int n_cands = (n_pairs >= K_pairs) ? (n_pairs - K_pairs + 1) : 0;
+    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc((size_t)(n_cands > 0 ? n_cands : 1) * sizeof(c7_cluster_cand_t));
     for(int i = 0; i < n_cands; i++){
         u32 x0 = 0u - ord_pairs[2 * i].T17;
         u32 x1 = 0u - ord_pairs[2 * (i + K_pairs - 1)].T17;
@@ -10228,8 +10353,8 @@ static int select_c9_twin_constellation(
     }
     qsort(cands, n_cands, sizeof(c7_cluster_cand_t), cmp_c7_cluster_span);
 
-    u8 *used = (u8 *)calloc(n_pairs, 1);
-    int *chosen_starts = (int *)malloc((size_t)num_clusters * sizeof(int));
+    u8 *used = (u8 *)calloc(n_pairs > 0 ? n_pairs : 1, 1);
+    int *chosen_starts = (int *)malloc((size_t)(num_clusters > 0 ? num_clusters : 1) * sizeof(int));
     int picked = 0;
     u32 max_sp = 0;
     u64 sum_sp = 0;
@@ -10253,8 +10378,6 @@ static int select_c9_twin_constellation(
         for(int k = 0; k < K_pairs; k++){
             out_ctxs[g * K_ctx + 2 * k + 0] = ord_pairs[2 * (st + k) + 0];
             out_ctxs[g * K_ctx + 2 * k + 1] = ord_pairs[2 * (st + k) + 1];
-            out_ctxs[g * K_ctx + 2 * k + 0].T16 = shared_T16;
-            out_ctxs[g * K_ctx + 2 * k + 1].T16 = shared_T16;
         }
         // Swap median twin pair to anchor position (pair 0) to minimize max offset from anchor!
         int med_p = K_pairs / 2 - 1;
@@ -10309,6 +10432,22 @@ static idea_bench_res_t run_cycle9_multibatch_bench(
 {
     int threads_per_block = 256;
     int num_tiles = 1 << (32 - tile_shift);
+    int valid_ctxs = 0;
+    while(valid_ctxs < B * R_batches && (ctxs_all[valid_ctxs].T16 != 0 || ctxs_all[valid_ctxs].T17 != 0 || ctxs_all[valid_ctxs].T18 != 0)) {
+        valid_ctxs++;
+    }
+    if(valid_ctxs < B * R_batches) {
+        if(valid_ctxs < B) B = (valid_ctxs / K_cluster) * K_cluster;
+        if(B > 0) R_batches = valid_ctxs / B;
+        else R_batches = 0;
+    }
+    if(B <= 0 || R_batches <= 0) {
+        idea_bench_res_t empty_res;
+        memset(&empty_res, 0, sizeof(empty_res));
+        empty_res.name = name;
+        printf("[Cycle8] Skipping %s: insufficient genuine colliding contexts (%d found)\n", name, valid_ctxs);
+        return empty_res;
+    }
     int B_eff = B * R_batches;
 
     gpu_params_t params;
@@ -11450,21 +11589,34 @@ sweep_cycle10_integrated_kernel(
     }
 }
 
-// Select B_total contexts grouped into M_tuple Exact-T17 Collision Tuples (M_tuple = 2, 4, or 8 sharing T17)
-static void select_c10_tuple_constellation(
+// Select B_total contexts grouped into M_tuple Exact-T17 Collision Tuples (M_tuple = 2, 4, or 8 sharing T17 and global shared_T16)
+static int select_c10_tuple_constellation(
     const right_ctx_t *sorted_by_t17, int n_pool, int B_total, int K_ctx, int M_tuple,
     u32 shared_T16, right_ctx_t *out_ctxs, u32 *out_max_span, double *out_avg_span)
 {
+    memset(out_ctxs, 0, (size_t)B_total * sizeof(right_ctx_t));
     int max_tuples = n_pool / M_tuple;
     right_ctx_t *tuples = (right_ctx_t *)malloc((size_t)max_tuples * M_tuple * sizeof(right_ctx_t));
     int n_tuples = 0;
-    for(int i = 0; i + M_tuple - 1 < n_pool && n_tuples < max_tuples; i += M_tuple){
+    for(int i = 0; i + M_tuple - 1 < n_pool && n_tuples < max_tuples; ){
         u32 base_t17 = sorted_by_t17[i].T17;
+        u32 base_t16 = sorted_by_t17[i].T16;
+        int ok_tuple = (base_t16 == shared_T16);
+        for(int m = 1; m < M_tuple; m++){
+            if(sorted_by_t17[i + m].T17 != base_t17 || sorted_by_t17[i + m].T16 != base_t16 || sorted_by_t17[i + m].T16 != shared_T16){
+                ok_tuple = 0;
+                break;
+            }
+        }
+        if(!ok_tuple){
+            i++;
+            continue;
+        }
         for(int m = 0; m < M_tuple; m++){
             tuples[n_tuples * M_tuple + m] = sorted_by_t17[i + m];
-            tuples[n_tuples * M_tuple + m].T17 = base_t17;
         }
         n_tuples++;
+        i += M_tuple;
     }
 
     c7_cluster_cand_t *t_order = (c7_cluster_cand_t *)malloc((size_t)(n_tuples > 0 ? n_tuples : 1) * sizeof(c7_cluster_cand_t));
@@ -11484,8 +11636,8 @@ static void select_c10_tuple_constellation(
 
     int K_tuples = K_ctx / M_tuple;
     int num_clusters = B_total / K_ctx;
-    int n_cands = n_tuples - K_tuples + 1;
-    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc((size_t)n_cands * sizeof(c7_cluster_cand_t));
+    int n_cands = (n_tuples >= K_tuples) ? (n_tuples - K_tuples + 1) : 0;
+    c7_cluster_cand_t *cands = (c7_cluster_cand_t *)malloc((size_t)(n_cands > 0 ? n_cands : 1) * sizeof(c7_cluster_cand_t));
     for(int i = 0; i < n_cands; i++){
         u32 x0 = 0u - ord_tuples[i * M_tuple].T17;
         u32 x1 = 0u - ord_tuples[(i + K_tuples - 1) * M_tuple].T17;
@@ -11494,8 +11646,8 @@ static void select_c10_tuple_constellation(
     }
     qsort(cands, n_cands, sizeof(c7_cluster_cand_t), cmp_c7_cluster_span);
 
-    u8 *used = (u8 *)calloc(n_tuples, 1);
-    int *chosen_starts = (int *)malloc((size_t)num_clusters * sizeof(int));
+    u8 *used = (u8 *)calloc(n_tuples > 0 ? n_tuples : 1, 1);
+    int *chosen_starts = (int *)malloc((size_t)(num_clusters > 0 ? num_clusters : 1) * sizeof(int));
     int picked = 0;
     u32 max_sp = 0;
     u64 sum_sp = 0;
@@ -11519,7 +11671,6 @@ static void select_c10_tuple_constellation(
         for(int k = 0; k < K_tuples; k++){
             for(int m = 0; m < M_tuple; m++){
                 out_ctxs[g * K_ctx + k * M_tuple + m] = ord_tuples[(st + k) * M_tuple + m];
-                out_ctxs[g * K_ctx + k * M_tuple + m].T16 = shared_T16;
             }
         }
         int med_t = K_tuples / 2 - 1;
@@ -11541,6 +11692,7 @@ static void select_c10_tuple_constellation(
     free(ord_tuples);
     free(t_order);
     free(tuples);
+    return picked * K_ctx;
 }
 
 static idea_bench_res_t run_cycle10_multibatch_bench(
@@ -11572,7 +11724,41 @@ static idea_bench_res_t run_cycle10_multibatch_bench(
 {
     int threads_per_block = 256;
     int num_tiles = 1 << (32 - tile_shift);
+    int B_req = B * R_batches;
+    int valid_ctxs = 0;
+    while(valid_ctxs < B_req && (ctxs_all[valid_ctxs].a5 != 0u || ctxs_all[valid_ctxs].T17 != 0u || ctxs_all[valid_ctxs].T18 != 0u || ctxs_all[valid_ctxs].T19 != 0u)){
+        valid_ctxs++;
+    }
+    valid_ctxs = (valid_ctxs / K_cluster) * K_cluster;
+    if(valid_ctxs < K_cluster){
+        idea_bench_res_t empty_r;
+        memset(&empty_r, 0, sizeof(empty_r));
+        empty_r.name = name;
+        printf("  %-64s | SKIPPED (insufficient genuine M=%d tuple contexts in pool: %d < %d)\n",
+               name, m_tuple, valid_ctxs, K_cluster);
+        fflush(stdout);
+        return empty_r;
+    }
+    if(valid_ctxs < B){
+        B = valid_ctxs;
+        R_batches = 1;
+    } else {
+        R_batches = valid_ctxs / B;
+    }
     int B_eff = B * R_batches;
+    // Verify before kernel launch that every context in ctxs_all[0..B_eff-1] is non-zero and satisfies both the M_tuple equality invariants and global shared_T16
+    for(int idx = 0; idx < B_eff; idx += m_tuple){
+        u32 base_t17 = ctxs_all[idx].T17;
+        u32 base_t16 = ctxs_all[idx].T16;
+        for(int m = 0; m < m_tuple; m++){
+            const right_ctx_t *rc = &ctxs_all[idx + m];
+            if((rc->a5 == 0u && rc->T17 == 0u && rc->T18 == 0u && rc->T19 == 0u) ||
+               rc->T17 != base_t17 || rc->T16 != base_t16 || rc->T16 != shared_T16){
+                fprintf(stderr, "Error: tuple invariant violation in %s at idx=%d+%d\n", name, idx, m);
+                exit(1);
+            }
+        }
+    }
 
     gpu_params_t params;
     memset(&params, 0, sizeof(params));
@@ -11863,14 +12049,19 @@ static int run_bench_cycle10(int cpu_threads, const u32 dig[8]){
     CUDA_CHECK(cudaMemcpy(&h_i33, d_i33, sizeof(c10_idea33_stats_t), cudaMemcpyDeviceToHost));
     printf("  [33a] Direct 4-Round Crossed Carry-Sudoku Spine (a2 = a3 = a4 = a5) across %llu states in %.4fs (%.1fM 20-Round-Eval/s!):\n",
            (unsigned long long)h_i33.states_tested, td1 - td0, (double)n_direct / (td1 - td0) / 1e6);
-    printf("        MAJ(a3,a2,a1)==MAJ(a4,a3,a2)==MAJ(a5,a4,a3)==a5: %llu / %llu (100.00%% Bit-Exact!)\n",
-           (unsigned long long)h_i33.maj345_collapse_ok, (unsigned long long)h_i33.states_tested);
-    printf("        e4 == a0 - S0(a5) == W3 + H3 + a0 (Const!)     : %llu / %llu (100.00%% Bit-Exact, Indep of a1!)\n",
-           (unsigned long long)h_i33.e4_const_ok, (unsigned long long)h_i33.states_tested);
-    printf("        5-Step Lock (a1=..=a5) e3 == am1 - S0(a5) Const: %llu / %llu (100.00%% Bit-Exact!)\n",
-           (unsigned long long)h_i33.e3_5step_const_ok, (unsigned long long)h_i33.states_tested);
-    printf("        4-Round Telescoping (R17,R18,R19,R20, 0 Q0^-1) : %llu / %llu (100.00%% Bit-Exact!)\n",
-           (unsigned long long)h_i33.tele_4round_ok, (unsigned long long)h_i33.states_tested);
+    double denom_33a = (h_i33.states_tested > 0) ? (double)h_i33.states_tested : 1.0;
+    printf("        MAJ(a3,a2,a1)==MAJ(a4,a3,a2)==MAJ(a5,a4,a3)==a5: %llu / %llu (%.2f%%)\n",
+           (unsigned long long)h_i33.maj345_collapse_ok, (unsigned long long)h_i33.states_tested,
+           100.0 * (double)h_i33.maj345_collapse_ok / denom_33a);
+    printf("        e4 == a0 - S0(a5) == W3 + H3 + a0 (Const!)     : %llu / %llu (%.2f%%, Indep of a1!)\n",
+           (unsigned long long)h_i33.e4_const_ok, (unsigned long long)h_i33.states_tested,
+           100.0 * (double)h_i33.e4_const_ok / denom_33a);
+    printf("        5-Step Lock (a1=..=a5) e3 == am1 - S0(a5) Const: %llu / %llu (%.2f%%)\n",
+           (unsigned long long)h_i33.e3_5step_const_ok, (unsigned long long)h_i33.states_tested,
+           100.0 * (double)h_i33.e3_5step_const_ok / denom_33a);
+    printf("        4-Round Telescoping (R17,R18,R19,R20, 0 Q0^-1) : %llu / %llu (%.2f%%)\n",
+           (unsigned long long)h_i33.tele_4round_ok, (unsigned long long)h_i33.states_tested,
+           100.0 * (double)h_i33.tele_4round_ok / denom_33a);
     printf("        Unique 20-Round Solution Recovered (< 2^32)    : Solved20=%u in %.4fs (a1=%08x == %08x, W1=%08x, W2=%08x, W3=%08x, W4=%08x!)\n",
            h_i33.solved20_direct, td1 - td0, h_i33.sol_a1_direct, a1_plant,
            h_i33.sol_W1_direct, h_i33.sol_W2_direct, h_i33.sol_W3_direct, h_i33.sol_W4_direct);
@@ -12099,9 +12290,27 @@ int main(int argc, char **argv){
         else if(!strcmp(argv[i], "--bench-cycle9")) bench_cycle9 = 1;
         else if(!strcmp(argv[i], "--bench-cycle10")) bench_cycle10 = 1;
         else if(!strcmp(argv[i], "--max-sweeps") && i+1<argc) max_sweeps = strtoull(argv[++i], NULL, 10);
+        else {
+            fprintf(stderr, "Error: unknown or incomplete option '%s'\n", argv[i]);
+            return 1;
+        }
     }
-    if(batch_ctx < 1) batch_ctx = 1;
-    if(batch_ctx > MAX_BATCH_CTX) batch_ctx = MAX_BATCH_CTX;
+    if(cpu_threads < 1 || cpu_threads > 4096){
+        fprintf(stderr, "Error: --threads must be in [1, 4096] (got %d)\n", cpu_threads);
+        return 1;
+    }
+    if(w_thresh < 0 || w_thresh > 32){
+        fprintf(stderr, "Error: --w-thresh must be in [0, 32] (got %d)\n", w_thresh);
+        return 1;
+    }
+    if(batch_ctx < 1 || batch_ctx > MAX_BATCH_CTX){
+        fprintf(stderr, "Error: --batch-ctx must be in [1, %d] (got %d)\n", MAX_BATCH_CTX, batch_ctx);
+        return 1;
+    }
+    if(table_gb != 0 && table_gb != 6 && table_gb != 16 && table_gb != 20){
+        fprintf(stderr, "Error: --table-gb must be 0 (auto), 6, 16, or 20 (got %d)\n", table_gb);
+        return 1;
+    }
 
     if(iv_hex){
         if(parse_hex32(iv_hex, IV) != 0){

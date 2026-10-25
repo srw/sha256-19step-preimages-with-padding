@@ -62,7 +62,7 @@ static const u32 IV[8] = {
 #define OFF 7
 #define MAX_BATCH_CTX 32
 
-#define ROR(x,n) (((x)>>(n))|((x)<<(32-(n))))
+#define ROR(x,n) (((x)>>((n)&31u))|((x)<<((32u-((n)&31u))&31u)))
 static inline u32 S0(u32 x){ return ROR(x,2)^ROR(x,13)^ROR(x,22); }
 static inline u32 S1(u32 x){ return ROR(x,6)^ROR(x,11)^ROR(x,25); }
 static inline u32 s0(u32 x){ return ROR(x,7)^ROR(x,18)^(x>>3); }
@@ -77,7 +77,7 @@ static double now_sec(void){
     return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
 }
 
-static inline u64 splitmix64(u64 *state){
+static inline __attribute__((unused)) u64 splitmix64(u64 *state){
     u64 z = (*state += 0x9E3779B97F4A7C15ULL);
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
     z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
@@ -157,7 +157,7 @@ static inline size_t slide3_off(u32 y){
     return (size_t)((y >> 1) + (y >> 2) - d);
 }
 
-static inline size_t slide4_off(u32 y){
+static inline __attribute__((unused)) size_t slide4_off(u32 y){
     return slide3_off(y) - (size_t)((y & 15u) >= 13u);
 }
 
@@ -292,15 +292,25 @@ static void *build_worker_4gb(void *arg){
             b_ulo[i] = (u16)(u & 0xffffu);
             __builtin_prefetch(&H_pack4[idx], 1, 0);
         }
+        _Atomic u32 *H_at4 = (_Atomic u32 *)H_pack4;
         for(int i=0; i<BUILD_PF; i++){
             u16 ulo = b_ulo[i];
             if(!ulo) continue;
             u32 idx = b_idx[i];
-            u32 cur = H_pack4[idx];
-            if((cur & 0xffffu) == 0u){
-                H_pack4[idx] = cur | (u32)ulo;
-            } else if((cur >> 16) == 0u && (cur & 0xffffu) != (u32)ulo){
-                H_pack4[idx] = cur | ((u32)ulo << 16);
+            u32 cur = atomic_load_explicit(&H_at4[idx], memory_order_relaxed);
+            for(;;){
+                u32 next = cur;
+                if((cur & 0xffffu) == 0u){
+                    next = cur | (u32)ulo;
+                } else if((cur >> 16) == 0u && (cur & 0xffffu) != (u32)ulo){
+                    next = cur | ((u32)ulo << 16);
+                } else {
+                    break;
+                }
+                if(atomic_compare_exchange_weak_explicit(&H_at4[idx], &cur, next,
+                        memory_order_relaxed, memory_order_relaxed)){
+                    break;
+                }
             }
         }
     }
@@ -350,15 +360,23 @@ static void *topup_pass1_worker_4gb(void *arg){
             b_ulo[i] = (u16)(u & 0xffffu);
             __builtin_prefetch(&H_pack4[idx], 0, 0);
         }
+        _Atomic u32 *H_at4 = (_Atomic u32 *)H_pack4;
         for(int i=0; i<64; i++){
             u16 ulo = b_ulo[i];
             if(!ulo) continue;
             u32 idx = b_idx[i];
-            u32 cur = H_pack4[idx];
-            if((cur >> 16) == 0u){
+            u32 cur = atomic_load_explicit(&H_at4[idx], memory_order_relaxed);
+            for(;;){
+                if((cur >> 16) != 0u) break;
                 u32 s0_lo = cur & 0xffffu;
-                if(s0_lo == 0u) H_pack4[idx] = (u32)ulo;
-                else if(s0_lo != ulo) H_pack4[idx] = cur | ((u32)ulo << 16);
+                u32 next = cur;
+                if(s0_lo == 0u) next = (u32)ulo;
+                else if(s0_lo != ulo) next = cur | ((u32)ulo << 16);
+                else break;
+                if(atomic_compare_exchange_weak_explicit(&H_at4[idx], &cur, next,
+                        memory_order_relaxed, memory_order_relaxed)){
+                    break;
+                }
             }
         }
     }
@@ -1431,15 +1449,8 @@ static void *ctx_worker(void *arg){
                             u32 a9_base = a9_5 + hi25;
                             u32 X0      = X_5  - hi25;
                             u32 a7_base = a7_b5 - (e14 & hi25);
-                            u32 B6_5    = c_a6 + MAJ(a9_5, a8, a7_5);
 
-                            // Stage 2: Rotation-Invariant S0(a9) Slices (bits 13..15 and bits 3..4) using invariant B6_5 and S_5
-                            u32 a6_0   = B6_5 + S0(a9_base);
-                            u32 a5_0   = (S_5 & ~D_5) ^ (a6_0 & D_5);
-                            u32 delta0 = a6_0 - a5_0;
-                            if((((delta0 >> 13) + 1u) & 0xeu) != 0u || (((delta0 >> 3) + 1u) & 0x6u) != 0u) continue;
-
-                            // Stage 3a: bits 19..21 (8 values, 22-bit Carry-Sudoku check & 0x3fffffu)
+                            // Stage 2a: bits 19..21 (8 values, 22-bit Carry-Sudoku check & 0x3fffffu)
                             for(u32 s19 = 0; s19 < (8u << 19); s19 += (1u << 19)){
                                 u32 a9_i1  = a9_base + s19;
                                 u32 X_i1   = X0 - s19;
@@ -1995,7 +2006,7 @@ static inline void drain_q2(q2_item_t *q2, int n_q2, q3_item_t *q3, int *n_q3,
     }
 }
 
-static inline void drain_q2_4gb_b1(const q2_hot_t *q2_hot, const q2_cold_t *q2_cold, int n_q2,
+static inline __attribute__((unused)) void drain_q2_4gb_b1(const q2_hot_t *q2_hot, const q2_cold_t *q2_cold, int n_q2,
                                    q3_item_t *q3, int *n_q3,
                                    u32 a0, u32 am1, u32 C_G3, u32 a5, u32 T18, int w_thresh,
                                    u64 *local_l2, u64 *local_l3){
@@ -4095,20 +4106,54 @@ int main(int argc, char **argv){
             else if(!strcmp(argv[i], "--f1-stream")) g_f1_stream = 1;
             else if(!strcmp(argv[i], "--l2-mode") && i+1<argc) g_l2_mode = atoi(argv[++i]);
             else if(!strcmp(argv[i], "--w-lo-max") && i+1<argc) g_w_lo_max = atoi(argv[++i]);
-            else if(!strcmp(argv[i], "--sweep-shift") && i+1<argc) g_sweep_limit = 1ULL << atoi(argv[++i]);
+            else if(!strcmp(argv[i], "--sweep-shift") && i+1<argc){
+                int sh = atoi(argv[++i]);
+                if(sh < 1) sh = 1;
+                if(sh > 32) sh = 32;
+                g_sweep_limit = 1ULL << sh;
+            }
             else if(!strcmp(argv[i], "--ctx-pool") && i+1<argc) g_ctx_init_pool = atoi(argv[++i]);
             else if(!strcmp(argv[i], "--pair-l1") && i+1<argc) g_pair_l1 = atoi(argv[++i]);
+            else {
+                fprintf(stderr, "Error: unknown or incomplete option '%s'\n", argv[i]);
+                return 1;
+            }
         }
     }
 
-    if(batch_ctx < 1) batch_ctx = 1;
-    if(batch_ctx > MAX_BATCH_CTX) batch_ctx = MAX_BATCH_CTX;
+    if(nthreads < 1 || nthreads > 4096){
+        fprintf(stderr, "Error: --threads must be in [1, 4096] (got %d).\n", nthreads);
+        return 1;
+    }
+    if(w_thresh < 0 || w_thresh > 32){
+        fprintf(stderr, "Error: --w-thresh must be in [0, 32] (got %d).\n", w_thresh);
+        return 1;
+    }
+    if(table_gb != 6 && table_gb != 32){
+        fprintf(stderr, "Error: --table-gb must be 6 or 32 (got %d).\n", table_gb);
+        return 1;
+    }
+    if(batch_ctx < 1 || batch_ctx > MAX_BATCH_CTX){
+        fprintf(stderr, "Error: --batch-ctx must be in [1, %d] (got %d).\n", MAX_BATCH_CTX, batch_ctx);
+        return 1;
+    }
+    if(!targ_hex || strlen(targ_hex) != 64){
+        fprintf(stderr, "Error: --target must be an exact 64-character hex string.\n");
+        return 1;
+    }
 
     u32 dig[8];
     for(int i=0;i<8;i++){
         char buf[9];
         memcpy(buf, targ_hex + 8*i, 8);
         buf[8] = 0;
+        for(int j=0;j<8;j++){
+            char c = buf[j];
+            if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))){
+                fprintf(stderr, "Error: --target contains non-hex character '%c'.\n", c);
+                return 1;
+            }
+        }
         dig[i] = (u32)strtoul(buf, NULL, 16);
     }
 
@@ -4146,6 +4191,7 @@ int main(int argc, char **argv){
         u64 ctx_trials = generate_right_contexts_parallel(nthreads);
         double t_ctx = now_sec() - t_ctx0;
         total_contexts += (u64)batch_ctx;
+        (void)total_contexts;
 
         if(batch_ctx >= 2){
             u32 dt16 = G_STATE.rctx[batch_ctx - 1].T16 - G_STATE.rctx[0].T16;

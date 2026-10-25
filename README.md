@@ -1,7 +1,7 @@
 # Preimages for 19- and 20-step SHA-256 with standard padding
 
-> **October 2026 Update — Full 19- & 20-Step Padded SHA-256 Paper, GPU Solvers & 29 20-Step Witnesses:**
-> See **[`paper_19_20_padded_sudoku/PAPER_19_20_PADDED_SHA256_final-v1.pdf`](paper_19_20_padded_sudoku/PAPER_19_20_PADDED_SHA256_final-v1.pdf)** (and [`paper_19_20_padded_sudoku/README.md`](paper_19_20_padded_sudoku/README.md)) for the complete research paper (*Practical Preimages for 19- and 20-Step Reduced SHA-256: Exact Algebraic Padding Inversion, Context Shaping, and Causal Bit-Slice Pruning*), the CUDA GPU solvers (`solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu` achieving `180,831.9 sol19/s` on 1× NVIDIA L4 GPU and `4.18 min` per 20-step padded preimage on 8× L4 GPUs), and all 29 verified 20-step preimage witnesses (`witnesses/witnesses_20step.txt`, `witnesses/demos_20step.txt`).
+> **October 2026 Update — Full 19- & 20-Step Padded SHA-256 Paper, CPU/GPU Solvers & 46 Distinct Verified Witnesses (48 Checks):**
+> See **[`PAPER_19_20_PADDED_SHA256_final-v1.pdf`](PAPER_19_20_PADDED_SHA256_final-v1.pdf)** (also in [`paper_19_20_padded_sudoku/PAPER_19_20_PADDED_SHA256_final-v1.pdf`](paper_19_20_padded_sudoku/PAPER_19_20_PADDED_SHA256_final-v1.pdf) and [`paper_19_20_padded_sudoku/README.md`](paper_19_20_padded_sudoku/README.md)) for the complete research paper (*Practical Preimages for 19- and 20-Step Reduced SHA-256: Exact Algebraic Padding Inversion, Context Shaping, and Causal Bit-Slice Pruning*), the companion pedagogical guide ([`COMPANION_SUDOKU_ELI5_ELIU.pdf`](COMPANION_SUDOKU_ELI5_ELIU.pdf)), the host-verifiable CPU solver (`solve20_padded_fast.c` achieving `6,242.8 sol19/s` / `191.1 node-h` on 1× 16-thread CPU node, `$2^{46.56}$ CPU-ref`), the CUDA GPU solvers (`solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu` achieving `53,847.5–132,888.7 sol19/s` / `8.98–22.16 GPU-h` on 1× NVIDIA L4 GPU on genuine contexts), and all **46 distinct verified 19- and 20-step preimage witnesses (48 checks)** verified by `python3 verify_all_witnesses.py`.
 
 This repository gives working preimages for **SHA-256 reduced to its first 19 and 20 of 64 steps, as a hash
 function** (written H19 and H20 below): standard initial value, standard padding, only steps 0–18 (or 0–19) on every
@@ -248,16 +248,13 @@ Full text: `docs/NOTE.md`.
 
 ## How this was produced
 
-This work was carried out with substantial AI assistance: Claude (Anthropic) agents did the
-derivations, implementation and experiments, and the checking was done by separate agents. It was
-directed and reviewed by the repository owner. Everything here is meant to be checked, not trusted:
-the witnesses are self-verifying, and corrections are welcome.
+The algebraic discoveries for the 19- and 20-step Carry-Sudoku / Slot-Sudoku solvers (closed-form $O(1)$ $W_{13}$ padding pivot inversion, Theorem 1 / Carry-Sudoku, Theorem 2 / closed-form $\mathbb{F}_2$ upper-half reconstruction, Slot-Sudoku tables, and the Zero-$a_3$ bi-directional bridge), C/CUDA solvers, and preimage witnesses were discovered and developed using **Google DeepMind Gemini 4 Argon** (building on earlier 19-step exploration assisted by Claude agents, with independent adversarial verification audits conducted using OpenAI GPT-6 Astra and Anthropic Claude Fable 5.1). It was directed and reviewed by the repository owner (`srw@egont.xyz`). Everything here is meant to be checked, not trusted: the witnesses are self-verifying (`python3 verify_all_witnesses.py`), and corrections are welcome.
 
 ## Layout
 
 | path | contents |
 |---|---|
-| `paper_19_20_padded_sudoku/` | **Main 19- & 20-step padded SHA-256 publication package**: `PAPER_19_20_PADDED_SHA256_final-v1.pdf`, `COMPANION_SUDOKU_ELI5_ELIU.pdf`, `solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu`, `solve20_padded_fast.c`, `verify_all_witnesses.py`, and all 29 20-step witnesses (`witnesses_20step.txt`, `demos_20step.txt`) |
+| `PAPER_19_20_PADDED_SHA256_final-v1.pdf` & `paper_19_20_padded_sudoku/` | **Main 19- & 20-step padded SHA-256 publication package**: `PAPER_19_20_PADDED_SHA256_final-v1.pdf`, `COMPANION_SUDOKU_ELI5_ELIU.pdf`, `solve20_padded_fast.c`, `solve20_padded_cuda.cu`, `solve20_padded_cuda_prod.cu`, `solve20_zero_a3.c`, `test_all_12_theories.c`, `verify_all_witnesses.py`, and all 46 distinct verified 19- and 20-step witnesses (`witnesses_20step.txt`, `demos_20step.txt`, `examples_abc_hello_20step.txt`, `FOUND_20ROUND_PREIMAGE.txt`) |
 | `src/` | `pre19.c` (first-generation solver), `aseq.py` (a-sequence toolkit), `validate_chain.py` (numerical check of the key identities) |
 | `verify/` | stdlib verifier (`verify_standalone.py`, supporting 19-step and 20-step witnesses), and an independently written checker |
 | `witnesses/` | all 19-step and 20-step witnesses and raw solver logs |

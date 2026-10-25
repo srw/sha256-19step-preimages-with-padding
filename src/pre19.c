@@ -39,7 +39,7 @@ static const u32 K[64] = {
 static u32 IV[8] = {0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
 static u64 PADLEN_BITS = 440;   /* total message length in bits (last block holds 55 bytes) */
 
-#define ROR(x,n) (((x)>>(n))|((x)<<(32-(n))))
+static inline u32 ROR(u32 x, int n){return (x>>(n&31))|(x<<((-n)&31));}
 static inline u32 S0(u32 x){return ROR(x,2)^ROR(x,13)^ROR(x,22);}
 static inline u32 S1(u32 x){return ROR(x,6)^ROR(x,11)^ROR(x,25);}
 static inline u32 s0(u32 x){return ROR(x,7)^ROR(x,18)^(x>>3);}
@@ -99,14 +99,74 @@ static int popc(u32 x){ return __builtin_popcount(x); }
 int main(int argc, char **argv){
     if(argc<5){ fprintf(stderr,"usage: %s comp|padded target_hex table_bits seed [kmax] [log2chains]\n",argv[0]); return 1; }
     int padded = strcmp(argv[1],"padded")==0;
+    if(!padded && strcmp(argv[1],"comp")!=0){
+        fprintf(stderr,"error: mode must be 'comp' or 'padded'\n");
+        return 1;
+    }
     int m = atoi(argv[3]);
-    int ntarg = (int)((strlen(argv[2])+1)/65);
+    if(m < 1 || m > 31){
+        fprintf(stderr,"error: table_bits must be between 1 and 31 (got %d)\n", m);
+        return 1;
+    }
+    size_t targ_len = strlen(argv[2]);
+    if(targ_len < 64 || ((targ_len + 1) % 65) != 0){
+        fprintf(stderr,"error: target_hex must be one or more 64-character hex digests separated by single delimiters\n");
+        return 1;
+    }
+    int ntarg = (int)((targ_len+1)/65);
+    for(int ti=0; ti<ntarg; ti++){
+        for(int j=0; j<64; j++){
+            char c = argv[2][65*ti+j];
+            if(!((c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F'))){
+                fprintf(stderr,"error: invalid hex character '%c' in target_hex at offset %d\n", c, 65*ti+j);
+                return 1;
+            }
+        }
+    }
     rs = strtoull(argv[4],0,10)*0x2545F4914F6CDD1DULL + 7;
     int kmax = argc>5 ? atoi(argv[5]) : 3;
+    if(kmax < 1 || kmax > 8){
+        fprintf(stderr,"error: kmax must be between 1 and 8 (got %d)\n", kmax);
+        return 1;
+    }
     int lgch = argc>6 ? atoi(argv[6]) : 26;
+    if(lgch < 1 || lgch > 32){
+        fprintf(stderr,"error: log2chains must be between 1 and 32 (got %d)\n", lgch);
+        return 1;
+    }
     for(int ai=7; ai<argc; ai++){
-        if(!strncmp(argv[ai],"iv=",3)){ for(int i=0;i<8;i++){ char b[9]; memcpy(b,argv[ai]+3+8*i,8); b[8]=0; IV[i]=(u32)strtoul(b,0,16);} }
-        else if(!strncmp(argv[ai],"len=",4)){ PADLEN_BITS = 8ULL*strtoull(argv[ai]+4,0,10); }
+        if(!strncmp(argv[ai],"iv=",3)){
+            const char *iv_hex = argv[ai] + 3;
+            if(strlen(iv_hex) != 64){
+                fprintf(stderr,"error: iv= must be followed by exactly 64 hex characters\n");
+                return 1;
+            }
+            for(int j=0; j<64; j++){
+                char c = iv_hex[j];
+                if(!((c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F'))){
+                    fprintf(stderr,"error: invalid hex character '%c' in iv= at offset %d\n", c, j);
+                    return 1;
+                }
+            }
+            for(int i=0;i<8;i++){ char b[9]; memcpy(b,iv_hex+8*i,8); b[8]=0; IV[i]=(u32)strtoul(b,0,16);}
+        }
+        else if(!strncmp(argv[ai],"len=",4)){
+            const char *len_str = argv[ai] + 4;
+            char *endp = NULL;
+            if(*len_str == '\0'){
+                fprintf(stderr,"error: len= requires a non-empty integer byte length\n");
+                return 1;
+            }
+            unsigned long long len_bytes = strtoull(len_str, &endp, 10);
+            if(!endp || *endp != '\0'){
+                fprintf(stderr,"error: invalid integer in len=%s\n", len_str);
+                return 1;
+            }
+            PADLEN_BITS = 8ULL * len_bytes;
+        } else {
+            fprintf(stderr,"error: unknown optional argument '%s' (expected iv=<64hex> or len=<bytes>)\n", argv[ai]);
+            return 1;
+        }
     }
     u64 chains_per_ctx = 1ULL<<lgch;
 
