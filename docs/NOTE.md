@@ -246,8 +246,8 @@ eliminated for 20-step padded messages as well: every candidate surviving Level 
 tree search is a valid 19-step padded preimage, and the 20th step is tested by a single terminal
 32-bit equation `σ_0(W_4) + W_3 ≡ W_19 − σ_1(W_17) − W_12 (mod 2^32)` at the same `~2^45.4`
 chain-start complexity. For the unpadded 20-step compression function, switching to the Zero-`a_3`
-Manifold (`a_3 = a_5 = a_6 = a_8 = a_9 = 0, a_10 = −1`, in `exploration/twenty_steps/solve20_zero_a3.c`
-and [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding))
+Manifold (`a_3 = a_5 = a_6 = a_8 = a_9 = 0, a_10 = −1`, in `solve20_zero_a3.c`
+and `paper_19_20_padded_sudoku/solve20_zero_a3.c`)
 eliminates the `(3/4)^32 ≈ 2^−13.28` majority filter altogether and finds a verified 20-step
 compression preimage in 21.1 minutes on 16 CPU vCPUs.
 

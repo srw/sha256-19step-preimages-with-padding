@@ -48,7 +48,7 @@ digest under H19 or H20.
 | 17 | hash function, with padding (messages of 31, 55 and 55 bytes) | McDair, *cryptography* mailing list, 28 March 2024 (not peer-reviewed; no method described; we recomputed all three at 17 steps) |
 | 17–18 | compression function, all-zero digest | Davydov et al., 2025 (SAT) |
 | 19 | compression function | Zaikin, *Constraints* 2026 (SAT, one all-ones target, 18 h 33 min on 192 cores); Basra 2026 (algebraic) |
-| 20 | compression function | Basra 2026 (GPU, about 2^45.4 table lookups); [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding) (CPU, ~2^33 via Zero-a3 Bi-Directional Q0/Q1 Bridge, 21.1 min on 16 vCPUs) |
+| 20 | compression function | Basra 2026 (GPU, about 2^45.4 table lookups); **this repository** (`solve20_zero_a3.c`, CPU, ~2^33 via Zero-a3 Bi-Directional Q0/Q1 Bridge, 21.1 min on 16 vCPUs) |
 | **19** | **hash function, with padding** | **this repository** |
 | **20** | **hash function, with padding** | **this repository ([`paper_19_20_padded_sudoku/`](paper_19_20_padded_sudoku/) & `witnesses/witnesses_20step.txt`)** |
 
@@ -207,8 +207,7 @@ Full text: `docs/NOTE.md`.
   While `exploration/twenty_steps/r20_split.py` recorded why keeping the 19-step shaping (`a5 = a6`,
   `e9 = e10 = -1`) makes going below Basra's ≈2^45.4 hard:
   - For **20-step unpadded compression**, switching to the Zero-$a_3$ Manifold (`a3 = a5 = a6 = a8 = a9 = 0,
-    a10 = -1`, in `exploration/twenty_steps/solve20_zero_a3.c` and the companion repository
-    [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding))
+    a10 = -1`, in `solve20_zero_a3.c` / `paper_19_20_padded_sudoku/solve20_zero_a3.c`)
     eliminates the $(3/4)^{32} \approx 2^{-13.28}$ residual filter and solves the 20-step compression
     function in ~2^33 (21.1 min on 16 CPU vCPUs).
   - For **19- and 20-step padded messages**, `exploration/twenty_steps/solve20_padded_fast.c` removes the
@@ -260,7 +259,7 @@ The algebraic discoveries for the 19- and 20-step Carry-Sudoku / Slot-Sudoku sol
 | `witnesses/` | all 19-step and 20-step witnesses and raw solver logs |
 | `docs/NOTE.md` | technical note: method, proof, costs, prior work |
 | `checks/` | re-check logs; `recheck_2026-10-13/` has an independent SHA-256, witness counts, the 22 new solves and their statistics |
-| `exploration/twenty_steps/` | `solve20_padded_fast.c` & `test_speedup.c` (exact `O(1)` `W_13` padding inversion, exact `D = 0` shaping, `<10 ms` 19-step padded & unified 20-step padded solver), `solve20_padded.c`, preliminary 20-step split analysis, and `solve20_zero_a3.c` (Zero-$a_3$ Bi-Directional Bridge solver; full repo at [srw/sha256-20step-preimages-with-no-padding](https://github.com/srw/sha256-20step-preimages-with-no-padding)) |
+| `exploration/twenty_steps/` | `solve20_padded_fast.c` & `test_speedup.c` (exact `O(1)` `W_13` padding inversion, exact `D = 0` shaping, `<10 ms` 19-step padded & unified 20-step padded solver), `solve20_padded.c`, preliminary 20-step split analysis, and `solve20_zero_a3.c` (Zero-$a_3$ Bi-Directional Bridge solver) |
 
 ## Credit and licence
 
