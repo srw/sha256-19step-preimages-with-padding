@@ -1,23 +1,10 @@
-# Practical Preimages for 19- and 20-Step Reduced SHA-256: Publication Package, Solvers & Verified Witnesses
+# Practical Preimages for 19- and 20-Step Reduced SHA-256: Solvers & Verified Witnesses
 
-This folder (`paper_19_20_padded_sudoku/`) contains the complete publication paper (`PAPER_19_20_PADDED_SHA256_final-v1.pdf` and `PAPER_19_20_PADDED_SHA256.pdf`), the companion **ELI5 & ELI-Undergraduate** pedagogical guide (`COMPANION_SUDOKU_ELI5_ELIU.pdf`, covering equations `[E1]`–`[E45]`), the standalone zero-dependency Python 3 verifier (`verify_all_witnesses.py`), all **46 distinct verified 19- and 20-step padded and unpadded witnesses (48 checks)**, and the multi-threaded C / CUDA GPU solvers discovered and developed using **Google DeepMind Gemini 4 Argon**.
-
----
-
-## Documents & Page Counts
-
-| File | Format | Pages | Description |
-| :--- | :---: | :---: | :--- |
-| **[`PAPER_19_20_PADDED_SHA256_final-v1.pdf`](PAPER_19_20_PADDED_SHA256_final-v1.pdf)** | PDF | **20 pages** | **Main Research Paper (IACR ePrint / Journal Version):** *Practical Preimages for 19- and 20-Step Reduced SHA-256: Exact Algebraic Padding Inversion, Context Shaping, and Causal Bit-Slice Pruning*. Features upfront 19-step and 20-step FIPS 180-4 padded preimages and prior-work comparison table in Section 1 (Pages 1–2), full untruncated 110-hex-char 55-byte padded benchmark preimages in Section 8.4 (Tables 8.2 & 8.3), Theorems 1 & 2, equations `[E1]`–`[E45]`, complete 20-step padded trajectory table, Zero-$a_3$ unpadded bridge, and Apple M4 CPU / NVIDIA L4 GPU benchmarks. |
-| **[`PAPER_19_20_PADDED_SHA256.pdf`](PAPER_19_20_PADDED_SHA256.pdf)** | PDF | **20 pages** | Synchronized build of the main research paper. |
-| **[`COMPANION_SUDOKU_ELI5_ELIU.pdf`](COMPANION_SUDOKU_ELI5_ELIU.pdf)** | PDF | **15 pages** | **Companion Pedagogical Document:** *Carry-Sudoku & Slot-Sudoku in Reduced SHA-256: A Self-Contained ELI5 and ELI-Undergraduate Companion Guide*. Provides a self-contained glossary of all symbols and equations `[E1]`–`[E45]`, plus dual **ELI5 (Explain Like I'm 5)** and **ELI-Undergraduate (ELIU)** derivations. |
-| [`PAPER_19_20_PADDED_SHA256_final-v1.md`](PAPER_19_20_PADDED_SHA256_final-v1.md) | Markdown + LaTeX | — | Full Markdown/LaTeX source of the main paper (`final-v1`). |
-| [`PAPER_19_20_PADDED_SHA256.md`](PAPER_19_20_PADDED_SHA256.md) | Markdown + LaTeX | — | Synchronized Markdown/LaTeX source of the main paper. |
-| [`COMPANION_SUDOKU_ELI5_ELIU.md`](COMPANION_SUDOKU_ELI5_ELIU.md) | Markdown + LaTeX | — | Full Markdown/LaTeX source of the companion ELI5 & ELI-Undergraduate document. |
+This folder (`paper_19_20_padded_sudoku/`) contains the standalone zero-dependency Python 3 verifier (`verify_all_witnesses.py`), all **46 distinct verified 19- and 20-step padded and unpadded witnesses (48 checks)**, and the multi-threaded C / CUDA GPU solvers discovered and developed using **Google DeepMind Gemini 4 Argon**.
 
 ---
 
-## Supporting Code, Solvers & Witnesses in This Folder
+## Solvers, Verification Suite & Witnesses in This Folder
 
 | File | Description |
 | :--- | :--- |
@@ -32,7 +19,6 @@ This folder (`paper_19_20_padded_sudoku/`) contains the complete publication pap
 | **[`solve20_padded_cuda_prod.cu`](solve20_padded_cuda_prod.cu)** | Multi-target production CUDA GPU solver (`twin2` / `single4`) used to generate the 20-step benchmark witnesses. |
 | **[`solve20_zero_a3.c`](solve20_zero_a3.c)** | 20-step unpadded compression solver using the Zero-$a_3$ Bi-Directional $Q_0/Q_1$ Bridge (`33.14 min` expected / `21.10 min` observed on 16 CPU cores, $2^{38.13}\text{ CPU-ref}$). |
 | **[`test_all_12_theories.c`](test_all_12_theories.c)** | 14-Theory algebraic and empirical verification suite (`[E20]`–`[E21]`, Theorem 2 `[E28]`–`[E29]`, `[E37]`, and Table 9.4 directions). |
-| **[`render_pdfs.py`](render_pdfs.py)** | Script to regenerate `PAPER_19_20_PADDED_SHA256_final-v1.pdf`, `PAPER_19_20_PADDED_SHA256.pdf`, and `COMPANION_SUDOKU_ELI5_ELIU.pdf` from the Markdown sources. |
 
 ---
 
